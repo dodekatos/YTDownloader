@@ -1,0 +1,7 @@
+{
+  "name": "ytdlp_host",
+  "description": "Native host for YTDownloader extension",
+  "path": "C:\\ProgramData\\YTDownloader\\native_host\\ytdlp_host.exe",
+  "type": "stdio",
+"allowed_extensions": ["ytdownloader@dodekatos"]
+}
