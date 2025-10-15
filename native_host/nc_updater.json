@@ -1,0 +1,7 @@
+{
+  "name": "nc_updater",
+  "description": "Native Client Updater for YTDownloader extension",
+  "path": "C:\\ProgramData\\YTDownloader\\native_host\\nc_updater.exe",
+  "type": "stdio",
+"allowed_extensions": ["ytdownloader@dodekatos"]
+}
