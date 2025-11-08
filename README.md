@@ -8,7 +8,7 @@ The extension includes a simple video and audio re-encoding tool that makes use 
 The extension also includes a Settings page where you can easily update all dependencies (YT-DLP, FFmpeg, Native Client), read update notes, and do various other things.
 
 ## Installation
-- (Recommended) The extension is available on the Firefox Add-on Store [Here](https://addons.mozilla.org/en-GB/firefox/addon/ytdownloader-dodekatos/) - Simply add it and follow the installation instructions.
+- (Recommended) The extension is available on the [Firefox Add-on Store](https://addons.mozilla.org/en-GB/firefox/addon/ytdownloader-dodekatos/) - Simply add it and follow the installation instructions.
   
 - (Manual) You can alternatively add the extension by downloading the [Latest GitHub Release](https://github.com/dodekatos/YTDownloader/releases/latest) and manually installing the extension: Head to the Firefox Extensions Manager page, click the Gear icon, and click <b>Install Add-on</b> from File.
 
