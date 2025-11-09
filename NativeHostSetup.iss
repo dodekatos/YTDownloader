@@ -20,14 +20,16 @@
 
 [Setup]
 AppName=YTDownloader Native Host
-AppVersion=0.3.5
+AppVersion=0.3.6
+VersionInfoVersion=0.0.3.6
 DefaultDirName={commonappdata}\YTDownloader
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 OutputBaseFilename=native-client-setup
-Compression=lzma
+Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=lowest
+SetupIconFile=icon-128.ico
 
 [Dirs]
 Name: "{commonappdata}\YTDownloader\bin"
