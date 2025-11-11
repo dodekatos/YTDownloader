@@ -29,7 +29,7 @@ OutputBaseFilename=native-client-setup
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=lowest
-SetupIconFile=icon-128.ico
+SetupIconFile=icon.ico
 
 [Dirs]
 Name: "{commonappdata}\YTDownloader\bin"
