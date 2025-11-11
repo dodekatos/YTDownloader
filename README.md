@@ -17,8 +17,8 @@ I'd recommend using the Firefox Add-on Store as it has automatic updates.
 I'll add more source code once I've figured out a good sustainable workflow for doing so for each release.
 
 ## Requirements
-- Firefox 112.0 or newer (April 2023)
-- Windows 10/11 64-bit only
+- Firefox 112.0 or newer (April 2023+)
+- Windows 10/11 (64-bit only)
 - Administrator is not required, though will be if you add a Windows Defender exception for the Native Client
 
 ## Support
