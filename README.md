@@ -27,8 +27,9 @@ If you've otherwise stumbled upon this, you're welcome to create an [Issue](http
 
 ## Privacy
 YTDownloader **does not** and **does not want to** collect or transmit any of your personal data. The closest it gets to that is:
-- The **locally stored** log file at C:\ProgramData\YTDownloader\log.txt will contain file paths for your debugging purposes
+- The **locally stored** log file at C:\ProgramData\YTDownloader\log.txt will contain file paths for *your* debugging purposes
 - YT-DLP obviously accesses the internet to download video/audio, but it does not use/affect any of your browser's cookies for this purpose
+- Firefox collects your Firefox version, addon version, language, operating system, daily Firefox usage pings, and mostly-anonymously aggregates this information to addon creators in their addon's statistics dashboard.
 
 ## License
 YTDownloader is licensed under the **GNU General Public License v3.0** (GPL-3.0), a CopyLeft and Open Source friendly license.
