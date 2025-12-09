@@ -38,4 +38,4 @@ Other dependencies used may be under different licenses, as follows:
 ## Credits / Dependencies used
 - [YT-DLP](https://github.com/yt-dlp/yt-dlp) (Main application for downloading video and audio - Be aware of fake or unofficial websites)
 - [FFmpeg + FFprobe](https://ffmpeg.org/) | [(Exact source)](https://github.com/GyanD/codexffmpeg) (Used by YT-DLP and the re-encode tool)
-- [Inno](https://jrsoftware.org/isinfo.php) (Used for the Native Client installer)
+- [Inno](https://jrsoftware.org/isinfo.php) (Used to create the Native Client installer)
