@@ -1,5 +1,5 @@
 ; YTDownloader - A browser addon for downloading videos from websites.
-; Copyright (C) 2025 dodekatos
+; Copyright (C) 2025-2026 dodekatos
 ;
 ; This program is free software: you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -12,7 +12,7 @@
 ; GNU General Public License for more details.
 ;
 ; You should have received a copy of the GNU General Public License
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ; YTDownloader Native Host Installer
 ; Downloads Native Client (+ Updater) for Firefox native messaging
@@ -20,8 +20,8 @@
 
 [Setup]
 AppName=YTDownloader Native Host
-AppVersion=0.3.6
-VersionInfoVersion=0.0.3.6
+AppVersion=0.5.0
+VersionInfoVersion=0.0.5.0
 DefaultDirName={commonappdata}\YTDownloader
 DisableDirPage=yes
 DisableProgramGroupPage=yes
@@ -85,7 +85,7 @@ Filename: "powershell.exe"; \
 
 ; === Install FFmpeg + FFprobe ===
 Filename: "powershell.exe"; \
-  Parameters: "-ExecutionPolicy Bypass -Command ""if (Test-Path '{commonappdata}\YTDownloader\bin\ffmpeg') {{ Remove-Item '{commonappdata}\YTDownloader\bin\ffmpeg' -Recurse -Force }; Invoke-WebRequest 'https://github.com/GyanD/codexffmpeg/releases/download/8.0/ffmpeg-8.0-full_build-shared.zip' -OutFile '{commonappdata}\YTDownloader\bin\ffmpeg-temp.zip'; Expand-Archive -Path '{commonappdata}\YTDownloader\bin\ffmpeg-temp.zip' -DestinationPath '{commonappdata}\YTDownloader\bin\ffmpeg'; Remove-Item '{commonappdata}\YTDownloader\bin\ffmpeg-temp.zip' -Force"""; \
+  Parameters: "-ExecutionPolicy Bypass -Command ""if (Test-Path '{commonappdata}\YTDownloader\bin\ffmpeg') {{ Remove-Item '{commonappdata}\YTDownloader\bin\ffmpeg' -Recurse -Force }; Invoke-WebRequest 'https://github.com/GyanD/codexffmpeg/releases/download/8.1/ffmpeg-8.1-full_build-shared.zip' -OutFile '{commonappdata}\YTDownloader\bin\ffmpeg-temp.zip'; Expand-Archive -Path '{commonappdata}\YTDownloader\bin\ffmpeg-temp.zip' -DestinationPath '{commonappdata}\YTDownloader\bin\ffmpeg'; Remove-Item '{commonappdata}\YTDownloader\bin\ffmpeg-temp.zip' -Force"""; \
   Flags: runhidden; \
   StatusMsg: "Downloading FFmpeg + FFprobe - This may take some time due to Powershell's slow download speed..."; \
   Tasks: install_ffmpeg
