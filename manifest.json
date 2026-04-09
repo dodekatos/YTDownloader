@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "YT Downloader",
+  "version": "0.5.0",
+  "description": "Download videos and audio using YTDLP via native app",
+  "permissions": ["nativeMessaging", "activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon-48.png"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png",
+	"256": "icons/icon-256.png"
+  },
+  "background": {
+    "scripts": ["background.js"],
+	"type": "module"
+  },
+  "options_ui": {
+  "page": "options.html",
+  "open_in_tab": true
+  },
+  "browser_specific_settings": {
+	"gecko": {
+	  "id": "yt-downloader@dodekatos",
+	  "strict_min_version": "112.0",
+	  "data_collection_permissions": {
+		"required": ["none"]
+	  }
+	}
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["first-run.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
