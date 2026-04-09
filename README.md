@@ -1,9 +1,9 @@
 # YTDownloader
 
-A lightweight and privacy friendly browser extension (currently just Firefox) that utilises [YT-DLP](https://github.com/yt-dlp/yt-dlp) to download video and audio from websites via a simple popup.  
+A lightweight and privacy friendly browser extension (currently just Firefox) that utilises [YT-DLP](https://github.com/yt-dlp/yt-dlp) to download video and audio from websites via a simple popup in Firefox's toolbar.  
 The popup interacts with a Native Client to run YT-DLP and serve other functions.
 
-The extension includes a simple video and audio re-encoding tool that makes use of FFmpeg and FFprobe. All re-encoding happens locally on your PC, currently with just CPU acceleration.
+The extension includes a simple video and audio re-encoding tool that makes use of FFmpeg and FFprobe. All re-encoding happens locally on your PC with either CPU or GPU acceleration.
 
 The extension also includes a Settings page where you can easily update all dependencies (YT-DLP, FFmpeg, Native Client), read update notes, and do various other things.
 
@@ -12,14 +12,12 @@ The extension also includes a Settings page where you can easily update all depe
   
 - (Manual) You can alternatively add the extension by downloading the [Latest GitHub Release](https://github.com/dodekatos/YTDownloader/releases/latest) and manually installing the extension: Head to the Firefox Extensions Manager page, click the Gear icon, and click <b>Install Add-on</b> from File.
 
-I'd recommend using the Firefox Add-on Store as it has automatic updates.  
-  
-I'll add more source code once I've figured out a good sustainable workflow for doing so for each release.
+I'd recommend using the Firefox Add-on Store as it has automatic updates.
 
 ## Requirements
 - Firefox 112.0 or newer (April 2023+)
 - Windows 10/11 (64-bit only)
-- Administrator is not required, though will be if you add a Windows Defender exception for the Native Client
+- Administrator is not required. You can optionally add a Windows Defender exception for the Native Client if your antivirus has issues with it. 
 
 ## Support
 This is essentially just a personal project that I'm sharing among some friends.  
@@ -36,6 +34,6 @@ YTDownloader is licensed under the **GNU General Public License v3.0** (GPL-3.0)
 Other dependencies used may be under different licenses, as follows:
 
 ## Credits / Dependencies used
-- [YT-DLP](https://github.com/yt-dlp/yt-dlp) (Main application for downloading video and audio - Be aware of fake or unofficial websites)
+- [YT-DLP](https://github.com/yt-dlp/yt-dlp) (Main application for downloading video and audio - Be aware of fake or unofficial websites and sources)
 - [FFmpeg + FFprobe](https://ffmpeg.org/) | [(Exact source)](https://github.com/GyanD/codexffmpeg) (Used by YT-DLP and the re-encode tool)
-- [Inno](https://jrsoftware.org/isinfo.php) (Used to create the Native Client installer)
+- [Inno](https://jrsoftware.org/isinfo.php) | [(Github)](https://github.com/jrsoftware/issrc/) (Used to create the Native Client installer)
