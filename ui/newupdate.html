@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; line-height: 1.5; background-color: #5e3749; color: #fff; }
+	
+	.checkYourDepsNotice { color: #92df8f; width: 84%; margin: 0 auto; text-align: center; }
+	.toggle-container { display: flex; align-items: center; gap: 6px; margin: 0 auto; width: 74%;}
+    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+	.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 20px; }
+	.slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+	input:checked + .slider { background-color: #8a8a8a; }
+	input:checked + .slider:before { transform: translateX(20px); }
+	.toggle-label { font-size: 14px; user-select: none; padding-left: 10px; }
+	li { margin-top: 4px; margin-bottom: 4px; padding-left: 5px; }
+	ul { padding-left: 20px; margin-top: 8px; }
+	h2 { margin: 15px 0px 0px; display: inline; }
+	p { margin: 0 6px; display: inline; font-size: 11px; font-style: italic; color: #d5d5d5; }
+	
+	button { padding: 10px 16px; background-color: #4CAF50; border: none; border-radius: 6px; color: white; font-size: 1em; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+  </style>
+  <title>Update Notes</title>
+  <link rel="icon" href="/icons/icon-32.png" type="image/x-icon">
+</head>
+<body>
+  <h1 style="text-align: center;">YTDownloader Update Notes</h1>
+  <br>
+  <div class="toggle-container">
+    <label class="switch">
+      <input type="checkbox" id="updatenewstoggle">
+      <span class="slider"></span>
+    </label>
+    <span class="toggle-label">Show this page whenever the addon updates?<br>I'd recommend it in case if there's any important changes.
+	<br>You can always re-enable it / manually visit this page in the Settings page.</span>
+  </div><br>
+  
+  <h3 class="checkYourDepsNotice">You should check the Settings page for any dependency updates.</h3>
+  <button id="settingsButton" style="display: flex; margin: 10px auto -15px;">Open Settings</button><br><br>
+  
+  <h2 class="currentver">V0.5.0</h2><p>(Current)</p>
+  <ul>
+  <li>Significant dependency updater improvements:</li>
+    <ul>
+      <li>Added automatic updates for dependencies. It will only run once a week after Firefox starts, updating only the dependencies with updates available. By default, this will be enabled because that's really how it should've been from the start. But if you're used to manually updating the dependencies, this can be disabled in the Settings.<br><i>Note that reinstalling the addon will cause the opt out preference to be cleared.</i></li>
+      <li>You might see a notification about the addon requiring a new permission for "storage".<br>This permission only allows this addon to access its own sandboxed storage API. This storage is only used to store the last time an automatic dependency update was ran, and whether you are opted in to see update notes whenever the addon updates.</li>
+      <li>Significantly improved the speed of manual dependency updates in the Settings by allowing multiple dependency update checks to be run simultaneously</li>
+    </ul>
+  <br>
+  <li>Significant Re-encode Tool improvements:</li>
+	<ul>
+	  <li>Added GPU acceleration support for H264/H265/AV1. Nvidia works, but Intel and AMD are currently untested, but <i>should</i> work</li>
+	  <li>Added H264 video codec</li>
+	  <li>Added notice for 10min+ ETAs to recommend using GPU acceleration</li>
+	  <li>Improved the accuracy of the rough ETA</li>
+	  <li>Removed the experimental 'Attach Thumbnail' option due to it not working. If you have any output files that don't have a thumbnail (usually just MKV+AV1), open the output file in the Windows Photos app to generate a thumbnail</li>
+	</ul>
+  <br>
+  <li>Additional improvements:</li>
+    <ul>
+      <li>Improved debug logging to prevent a rare issue with the file growing too large due to it sometimes being unable to truncate the file</li>
+      <li>Added icons to the addon's tabs (I'll change the icon to something less placeholder-y in a future update)</li>
+	  <li>Changed the storage API used for the update notes toggle to storage.local so if you've ticked this before, you'll probably have to tick it again</li>
+    </ul>
+  </ul>
+  <br>
+  
+  <h2>V0.4.0</h2><p>2025-11-16</p>
+  <ul>
+  <li>Added Deno dependency - Recent changes by YouTube means Deno will very soon be required for YTDLP to download YouTube videos</li>
+  </ul>
+  
+  <h2>V0.3.6</h2><p>2025-11-11</p>
+  <ul>
+  <li>Added a Manual Download tool, accessible in the Settings</li>
+  <li>Improved the installation and setup process</li>
+  <li>Fixed file size estimation not working for YouTube playlist double URLs</li>
+  </ul>
+  
+  <h2>V0.3.5</h2><p>2025-11-01</p>
+  <ul>
+  <li>Public release</li>
+  <li>Added info and button on adding antivirus exception if users are experiencing issues with it</li>
+  <li>Improved re-encoding tool's output selection validation</li>
+  </ul>
+  
+  <h2>V0.3.4</h2><p>2025-10-27</p>
+  <ul>
+  <li>Removed .amv from download options because it was causing issues and not working reliably. It is now available in the re-encode tool</li>
+  <li>Removed all unused code, should make the Native Client a bit faster</li>
+  </ul>
+  
+  <h2>V0.3.3</h2><p>2025-10-15</p>
+  <ul>
+  <li>Minor cosmetic changes / fixes</li>
+  </ul>
+  
+  <h2>V0.3.2</h2><p>2025-10-15</p>
+  <ul>
+  <li>Significantly improved the Dependency Checker and Updater</li>
+  <li>Added updating for: FFmpeg, FFprobe, Native Client, Native Client Updater</li>
+  <li>Removed old re-encoding code, and most old dependency checker code</li>
+  </ul>
+  
+  <h2>V0.3.1</h2><p>2025-10-10</p>
+  <ul>
+  <li>Attempted to fix Native Client self updating (didn't work)</li>
+  </ul>
+  
+  <h2>V0.3</h2><p>2025-10-09</p>
+  <ul>
+  <li>Start of limited public testing release</li>
+  <li>Due to Firefox not letting me simply bundle .exe's with the addon, I've had to add a way to download the dependencies and native app</li>
+  </ul>
+  
+  <h2>V0.2</h2><p>2025-09</p>
+  <ul>
+  <li>Everything works on my machine&#8482;</li>
+  </ul>
+  
+  <h2>V0.1</h2><p>2025-07</p>
+  <ul>
+  <li>Some stuff works on my machine&#8482;</li>
+  </ul>
+  
+  <script src="newupdate.js"></script>
+</body>
+</html>

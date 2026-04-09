@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.5; background-color: #0b41a6; color: #fff; }
+    #suppsites { text-decoration: none; color: white; }
+    button { padding: 10px 16px; background-color: #4CAF50; border: none; border-radius: 6px; color: white; font-size: 1em; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+	browseBtn:hover { background-color: #fefefe; }
+	button.cooldown { background-color: #999 !important; cursor: progress !important; pointer-events: none; position: relative; }
+	.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid #000; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+	
+	.toggle-container { display: flex; align-items: center; gap: 6px; }
+    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+	.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 20px; }
+	.slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+	input:checked + .slider { background-color: #8a8a8a; }
+	input:checked + .slider:before { transform: translateX(20px); }
+	.toggle-label { font-size: 14px; user-select: none; }
+	
+	.dependency-table { width: 1150px; border-collapse: collapse; margin-top: 1rem; font-size: 14px; }
+	.dependency-table th, .dependency-table td { border: 1px solid var(--border-color, #ccc); padding: 8px 10px; text-align: center; }
+	.dependency-table th:nth-child(5), .dependency-table td:nth-child(5) { padding: 8px 10px; min-width: 250px; max-width: 300px; }
+	.dependency-table th { background: var(--header-bg, #2d176a); font-weight: bold; font-size: 1.2em; }
+	.dep-btn { padding: 5px 10px; border: none; border-radius: 6px; cursor: pointer; background-color: var(--accent-color, #0078d7); color: white; transition: background-color 0.2s ease; }
+	.dep-btn:hover { background-color: var(--accent-hover, #005fa3); }
+	.status-text { font-size: 13px; color: var(--status-color, #fff); }
+  </style>
+  <title>YTDownloader Settings</title>
+  <link rel="icon" href="/icons/icon-32.png" type="image/x-icon">
+</head>
+<body>
+  <h1 style="margin: 0;">YTDownloader Settings</h1>
+  <p id="manifestVersion" style="margin: -8px 2px; font-size: 14px; color: lightgrey;">Couldn't find version</p>
+  <div id="status", style="color: #ff3000">JS Status: Javascript has NOT loaded - this should be IMMEDIATE so if you've read this far, try unblocking javascript.
+  <br>This error message could also show if there's some critical error in the JS - in which case, check if there's any addon updates in Firefox.</div>
+  <br>
+  
+  <div id="dependency-section" class="settings-section">
+    <h2>Dependency Checker and Updater</h2>
+	<p>All of these <strong>must</strong> be installed for the addon to work. You should check on this occasionally, as it can fix issues 
+	with downloads and add more features.
+	<br>The Firefox Addon itself should automatically update, as that's handled by Firefox.</p>
+	
+	<div class="toggle-container">
+    <label class="switch">
+      <input type="checkbox" id="autoupdatetoggle">
+      <span class="slider"></span>
+    </label>
+    <span class="toggle-label">Enable for automatic dependency updates, checked weekly.<br>It should only be disabled if you want to manually update dependencies yourself.</span>
+  </div><br>
+	
+	<p style="color:#bfbfbf; font-size: 13px; margin: -5px auto;">You can refresh the page to re-check the current versions.</p>
+    <table id="dependency-table" class="dependency-table">
+      <thead>
+        <tr>
+          <th>Dependency</th>
+          <th>Current Version</th>
+          <th>Latest Version</th>
+          <th>Action</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr id="dep-ffmpeg">
+          <td>FFmpeg + FFprobe</td>
+          <td class="current-version">Checking...</td>
+          <td class="latest-version"><a href="https://github.com/GyanD/codexffmpeg/releases" target="_blank" style="color: inherit; text-decoration: none;">-</a></td>
+          <td>
+            <button class="dep-btn" data-dep="ffmpeg">Check for updates</button>
+          </td>
+          <td class="status-text"></td>
+        </tr>
+        <tr id="dep-ytdlp">
+          <td>YT-DLP</td>
+          <td class="current-version">Checking...</td>
+          <td class="latest-version"><a href="https://github.com/yt-dlp/yt-dlp/releases" target="_blank" style="color: inherit; text-decoration: none;">-</a></td>
+          <td>
+            <button class="dep-btn" data-dep="ytdlp">Check for updates</button>
+          </td>
+          <td class="status-text"></td>
+        </tr>
+        <tr id="dep-deno">
+          <td>Deno</td>
+          <td class="current-version">Checking...</td>
+          <td class="latest-version"><a href="https://github.com/denoland/deno/releases" target="_blank" style="color: inherit; text-decoration: none;">-</a></td>
+          <td>
+            <button class="dep-btn" data-dep="deno">Check for updates</button>
+          </td>
+          <td class="status-text"></td>
+        </tr>
+        <tr id="dep-native">
+          <td>Native Client</td>
+          <td class="current-version">Checking...</td>
+          <td class="latest-version"><a href="https://github.com/dodekatos/YTDownloader/tree/main/native_host" target="_blank" style="color: inherit; text-decoration: none;">-</a></td>
+          <td>
+            <button class="dep-btn" data-dep="native">Check for updates</button>
+          </td>
+          <td class="status-text"></td>
+        </tr>
+		<tr id="dep-nc_updater">
+          <td>Native Client Updater</td>
+          <td class="current-version">Checking...</td>
+          <td class="latest-version"><a href="https://github.com/dodekatos/YTDownloader/tree/main/native_host" target="_blank" style="color: inherit; text-decoration: none;">-</a></td>
+          <td>
+            <button class="dep-btn" data-dep="nc_updater">Check for updates</button>
+          </td>
+          <td class="status-text"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <a href="https://github.com/dodekatos/YTDownloader/raw/refs/heads/main/native-client-setup.exe" style="text-decoration: none; color: #bfbfbf; font-size: 13px; padding-top: 5px; display:inline-block;">Not working? <u>Click me</u> to download the Native Client installer</a>
+  <br><br>
+  
+  <div id="toolsdiv" style="border: 5px solid #e3baff; max-width: 360px">
+    <h2 style="text-align: center; margin: 12px 0;">Built-in Useful Tools</h2>
+	<div style="justify-content: center; display: flex; margin-bottom: 10px;">
+      <button id="open-reencode" style="background-color: #aa72e1; margin-right: 6px;">Re-encode Tool</button>
+	  <button id="open-manualdownload" style="background-color: #aa72e1">Manual Download Tool</button>
+	</div>
+  </div>
+  <br>
+  
+  <button><a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank", id="suppsites">List of Supported Sites</a></button>
+  <br><br>
+  
+  <div style="display:none;"><button id="open-firstrun" style="background-color: #ee2e89">Open First Run Page (dev testing)</button>
+  <br><br></div>
+  
+  <button id="open-updatenews">Open Update Notes</button>
+  <br><br>
+  
+  <div class="toggle-container">
+    <label class="switch">
+      <input type="checkbox" id="updatenewstoggle">
+      <span class="slider"></span>
+    </label>
+    <span class="toggle-label">Enable this to be shown update notes whenever the addon updates.<br>I'd recommend it in case if there's 
+	any important changes.</span>
+  </div><br>
+  
+  <h2 style="color: white; margin: 10px 0px;">Current download location: <span id="currentPath">Loading...</span></h2>
+  <!-- <h4 style="color: #79ffff; margin: 8px 0px;">Example file path input: Z:\MyFolder\Downloads</h4> -->
+  <label for="downloadPath" style="color: #9aff00">Enter a new download path if you want:</label><br>
+  <input type="text" id="downloadPath" placeholder="Z:\MyFolder\Downloads" style="width: 600px">
+  <p id="dlenstatus" style="display: none; margin-left: 20px; color: #ffc949;">Notice: This download path might be too long for Windows. By default, 
+  Windows is limited to 260 characters for any directories + file name.<br>Consider a shorter base download folder path, as if any downloaded file 
+  names go over this limit, it will fail to download.</p>
+  <br>
+  <button id="saveBtn">Save</button><button id="browseBtn" style="background-color: #009d9d; margin-left: 5px;">Browse</button>
+  <p id="dlocstatus" style="display: inline-block; margin-left: 20px;"></p>
+  <br><br>
+  
+  <div style="border: 5px solid #e3baff; max-width: 990px">
+    <h3 style="margin-bottom: 15px; text-align: center;">Having issues with Windows Defender flagging the Native Client or abruptly stopping FFmpeg re-encodes?</h3>
+    <p style="margin-bottom: 0; padding: 0 18px;">Open your Antivirus (or click the button below), and navigate through:<br>
+	<strong>Add an exclusion</strong> >> <strong>Folder</strong> >> <strong>C:\ProgramData\YTDownloader\bin</strong><br>
+	<button id="defenderBtn" style="margin: 16px 8px;">Open Windows Defender</button><br>
+    You will see an <strong>Administrator prompt (UAC)</strong> after clicking the button.<br>
+	This is normal Windows behaviour, because you're opening the Windows Defender Exclusions page. For the sake of transparency, the 
+	addon <strong>will not add the exception automatically.</strong> You can add the exception yourself.</p>
+    <br>
+  </div>
+  
+  <br>
+  <button id="enable-notifications">Enable Notifications in your system tray (Optional)</button>
+  <p id="notifications-message" style="display: none; color: orange;"></p>
+  <p><i>To disable desktop notifications, just click on the site permissions button in your toolbar next to the URL, then remove 'Send notifications'</i></p>
+  <br>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

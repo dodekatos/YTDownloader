@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 10px auto; padding: 20px; line-height: 1.5; background-color: #5e3749; color: #fff; }
+    .row { margin-bottom: 8px; }
+	label { display: inline-block; width: 160px; }
+    select, input[type="text"], button { padding: 6px; }
+    #warning { color: #ffa700; margin-top: 6px; display: none; }
+    #result { margin-top: 10px; white-space: pre-wrap; }
+    #fileSummary { font-size: 0.85em; color: #bfbfbf; white-space: pre-line; margin-bottom: 20px; }
+	#fileSummary div { margin-bottom: -24px; font-size: 15px; }
+	
+    .hidden { display: none; }
+	h1 { font-size: 1.5em; margin-bottom: 0.5em; }
+    ol { margin-bottom: 1.5em; }
+    button { padding: 10px 16px; background-color: #4CAF50; border: none; border-radius: 6px; color: white; font-size: 1em; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+	button.cooldown { background-color: #999 !important; cursor: progress !important; pointer-events: none; position: relative; }
+	.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid #000; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+	
+	.quality-option, .hwquality-option { flex: 1; text-align: center; padding: 6px 10px; border: 1px solid #999; border-radius: 8px; cursor: pointer; user-select: none; transition: background-color 0.2s, border-color 0.2s; }
+    .quality-option:hover, .hwquality-option:hover { border-color: #555; }
+    .quality-option.selected { color: white; border-color: #3b82f6; }
+	.qlow { background-color: #00931e; }
+	.qmed { background-color: #3b82f6; }
+	.qhigh { background-color: #b52d60; }
+	.hwquality-option.selected { color: white; border-color: #3b82f6; }
+	.hwcpu { background-color: #a26525; }
+	.hwnvidia { background-color: #67a200; }
+	.hwintel { background-color: #2263a8; }
+	.hwamd { background-color: #b52328; }
+  </style>
+  <title>Re-encoding Tool</title>
+  <link rel="icon" href="/icons/icon-32.png" type="image/x-icon">
+</head>
+<body>
+  <h1>Video / Audio Re-encoding Tool</h1>
+  <p>You can use this to re-encode videos or audio into different codecs / formats, making use of FFmpeg entirely locally on your PC.
+  <br>I've tried to foolproof it as much as I could, but it does require an ounce of thinking.</p>
+  
+  <p style="color:orange;">Note: The output file size for some high quality videos might be higher than the source video, I'll fix this in a future update. You should check this after encoding.</p>
+  <br>
+  
+  <div class="row">
+    <button id="pickBtn" style="display: block;">Choose File…</button>
+  </div>
+  
+  <div id="fileSummary" class="row hidden">
+    <div>Selected: <span id="ffselected"></span></div>
+	<div>Container: <span id="ffcontainer"></span></div>
+	<div>Video Resolution: <span id="ffwidth"></span>x<span id="ffheight"></span> @ <span id="fffps"></span>fps</div>
+	<div>Video Codec: <span id="ffvcodec"></span></div>
+	<div>Video Bitrate: <span id="ffvbitrate"></span>MB/s</div>
+	<div>Audio Codec: <span id="ffacodec"></span></div>
+	<div>Audio Bitrate: <span id="ffbitrate"></span>kbps</div>
+	<div>Duration: <span id="ffduration" style="display: none;"></span><span id="ffduration2"></span></div>
+	<div>Total File Size: <span id="ffsize"></span></div>
+	<div style="display: block;">CPU Threads: <span id="ffthreads"></span></div>
+	<div>Output Location: <span id="ffoutputlocation"></span></div>
+  </div>
+  
+  <div id="options" class="hidden">
+    <div class="row">
+      <label>Output Container</label>
+      <select id="containerSel">
+	    <optgroup label="Standard options">
+        <option value=".mkv">.MKV</option>
+        <option value=".mp4">.MP4</option>
+        <option value=".m4a">.M4A - Audio only</option>
+        <option value=".mp3">.MP3 - Audio only</option>
+		</optgroup>
+		<optgroup label="Extra options">
+        <option value=".amv">.AMV</option>
+		</optgroup>
+      </select>
+    </div>
+	<br>
+    <div class="row" id="videoRow">
+      <label>Video codec</label>
+      <select id="videoSel">
+        <option value="copy">Copy from source</option>
+        <option value="libsvtav1">AV1</option>
+        <option value="libx265">H.265</option>
+        <option value="libx264">H.264</option>
+        <option value="none">No video</option>
+        <option value="amv">AMV Video</option>
+      </select>
+    </div>
+
+    <div class="row" id="audioRow">
+      <label>Audio codec</label>
+      <select id="audioSel">
+        <option value="copy">Copy from source</option>
+        <option value="aac">AAC</option>
+        <option value="libmp3lame">MP3</option>
+        <option value="none">No audio</option>
+        <option value="amv" style="display: none;">AMV Audio</option>
+      </select>
+    </div>
+    <div id="warning"></div>
+    <div id="warning2"></div>
+    <div id="warning3"></div>
+	<br>
+	
+	<div id="qualitySelectorContainer" style="margin-top:10px; display:none; flex-direction:column; gap:6px;">
+      <label style="font-weight:500;">Video quality:</label>
+      <div id="qualityOptions" style="display:flex; gap:8px;">
+        <div class="quality-option" data-quality="low">Lower quality</div>
+        <div class="quality-option qmed selected" data-quality="default">Default quality</div>
+        <div class="quality-option" data-quality="high">Higher quality</div>
+      </div>
+      <div id="qualityDesc" style="font-size: 14px; color: #c8c8c8;">Recommended for best balance of quality and size</div>
+    <br></div>
+	
+	<div id="hwQualitySelectorContainer" style="margin-top:10px; display:none; flex-direction:column; gap:6px;">
+      <label style="font-weight:500; width: 230px;">Hardware used for encoding:</label>
+      <div id="hwQualityOptions" style="display:flex; gap:8px;">
+        <div class="hwquality-option" data-quality="cpu">CPU</div>
+        <div class="hwquality-option hwnvidia selected" data-quality="nvidia">Nvidia GPU</div>
+        <div class="hwquality-option" data-quality="intel">Intel GPU</div>
+        <div class="hwquality-option" data-quality="amd">AMD GPU</div>
+      </div>
+      <div id="hwQualityDesc" style="font-size: 14px; color: #c8c8c8;">Significantly faster than CPU encoding. Recommended if you have an Nvidia GPU.</div>
+    <br></div>
+	
+	<div id="encodeOptions" style="margin-top:10px; display:flex; flex-direction:column; gap:4px; font-size:14px;">
+      <label><input type="checkbox" id="optMetadata" checked> Attach file metadata</label>
+      <label><input type="checkbox" id="optChapters" checked> Attach chapters</label>
+	  
+	  <!-- display was flex, hidden while it's not ready -->
+	  <div id="fpsContainer" style="display: none; flex-direction: column; gap: 4px;"> 
+	    <div style="display: flex; align-items: center; gap: 6px;">
+		  <label style="width: fit-content;"><input type="checkbox" id="changeFpsCheckbox"> Change FPS - <i>Very Experimental</i></label>
+	      <input type="text" id="fpsInput" placeholder="60" style="width: 42px; padding: 3px; border: 1px solid #aaa; border-radius: 4px; display: none; text-align: center;" maxlength="7">
+        </div>
+		<span id="fpsError" style="font-size: 14px; color: red; display: none; background-color: black; width: fit-content; padding: 0 5px; margin-top: 3px;"></span>
+		<span id="fpsInfo" style="font-size: 14px; color: #ecb228; display: none;"></span>
+	  </div>
+	</div><br>
+	
+	<div style="color: #faa;">Very rough ETA: <span id="ffeta">Estimating..</span>
+	<span id="ffetaUpper" style="display: none;"></span>
+	<span id="ffetaMid" style="display: none;"></span>
+	<div style="display: none; color: #ff5400;"> (debug: <span id="ffetaMidFormatted" style="display: inline-block;"></span>)</div> <!-- testing, don't forget to set this to none -->
+	<div style="color: #1de800; display: none;" id="bettereta">Progress: <span id="ffbettereta">Estimating..</span></div>
+	<br><span id="ffetanotice" style="display: none; margin: 7px 0; color: #d7ac5c">Hey! Looks like your encode time is more than 10 minutes! If 
+	you've got a GPU, you might want to consider using GPU encoding instead, for much faster encoding.</span>
+	</div>
+	
+	<div id="encodeTimerContainer" style="display: block;">
+	  <span id="encodeTimer" style="color: #ccc;"></span>
+	  <span id="encodeNotice" style="color: #ffcc00; margin-left: 8px;"></span>
+	</div>
+    
+	<div class="row" style="display: flex;">
+      <button id="startBtn" style="display: block;">Start Re-encode</button>
+	  <button id="cancelBtn" style="display: none; background-color: #ce1c1c; padding: 5px 10px; margin-left: 8px;">&#9940; Stop</button>
+    </div>
+	<span id="cancelInfo" style="display: none; color: #ffef00;">Re-encode has been cancelled.<br>
+	The partially completed output file will not be automatically deleted.</span>
+  </div>
+
+  <div id="result"></div>
+  
+  <br>
+  <script src="reencode.js"></script>
+</body>
+</html>

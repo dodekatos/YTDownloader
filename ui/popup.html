@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root { --bg-color: #121212; --text-color: #ffffff; --button-bg: #8f8f8f; --button-hover-bg: #2c2c2c; }
+	body.light-mode { --bg-color: #ff6c0a; --text-color: #1a1a1a; --button-bg: #fea05a; --button-hover-bg: #ececec; }
+	body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); transition: background-color 0.2s, color 0.2s; padding: 10px; width: 420px; }
+	#top-bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; gap: 8px; }
+	#top-bar button { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-color); }
+	#top-bar button:hover { opacity: 0.7; }
+	#theme-toggle, #settings-button, #estimateBtn { width: 32px; height: 32px; font-size: 1.4rem; background: none; border: none; cursor: pointer; flex-shrink: 0; }
+	#theme-toggle:hover, #settings-button:hover { opacity: 0.7; }
+	
+	#downloadOptions { text-align: center; font-size: 15pt; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    button { position: relative; justify-content: center; background-color: var(--button-bg); border: none; border-radius: 6px; width: 100%; margin-bottom: 6px; padding: 4px; }
+	button:hover { background-color: #ececec; }
+    #status { margin-top: 10px; font-size: 16px; color: var(--text-color); transition: background-color 0.2s, color 0.2s; }
+	#toggleMoreBtn { background: none; color: var(--text-color); font-size: 15px; text-align: left; font-style: italic; transition: background-color 0.2s, color 0.2s; }
+	.download-button { width: 207px; background-color: var(--button-bg); color: var(--text-color); transition: background-color 0.2s, color 0.2s; }
+	.download-button:hover { background-color: var(--button-hover-bg); }
+	.download-button.cooldown { background-color: #ccc !important; cursor: progress !important; pointer-events: none; position: relative; }
+	.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid #000; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
+    .spinnerlight { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 45px; vertical-align: middle; margin-top: -55px;}
+    @keyframes spin { to { transform: rotate(360deg); } }
+	.btnlabel { font-size: 13pt; z-index: 1; }
+	.size { position: absolute; right: 8px; font-size: 10px; font-style: italic; display: none; z-index: 1; }
+	
+	.showsize { display: inline-block; }
+  </style>
+</head>
+<body>
+  <div id="top-bar">
+	<button id="estimateBtn" title="Estimate File Sizes"><i style="font-size: 1rem;">..MB</i></button>
+	
+    <div id="downloadOptions"><strong>Download Options</strong></div>
+	
+    <button id="theme-toggle" title="Toggle Light/Dark Mode">🌙</button>
+    <button id="settings-button" title="Settings">⚙️</button>
+  </div>
+  
+  <p id="notice0" style="display: none; ">Waiting to fetch file sizes..</p>
+    
+	<!-- Shows if the URL is detected as being a YouTube Playlist - YouTube-optimised options, minus estimated file sizes -->
+	<div id="playlistOptions" style="display: none; ">
+	  <p>YouTube Playlist detected.</p>
+	  <p style="margin: -5px 0">Clicking any of the download options will immediately download the whole playlist at the chosen option.</p>
+	  <p>Private playlists will not work - only Public/Unlisted will work.</p>
+	</div>
+	<!-- These two are intentionally similar! Playlist options are intentionally missing size estimations!! -->
+	
+	<!-- Shows if the URL is detected as being a YouTube video - YouTube-optimised options -->
+    <div id="youtubeOptions" style="display: none; ">
+	  <button class="download-button" data-format="best">
+	  <span class="btnlabel">Best Video</span>
+	  <span class="size" id="size-best">...MB</span></button>
+	  <button class="download-button" data-format="2160p">
+	  <span class="btnlabel">4K Video</span>
+	  <span class="size" id="size-2160p">...MB</span>
+	  </button>
+	  <button class="download-button" data-format="1440p">
+	  <span class="btnlabel">1440p Video</span>
+	  <span class="size" id="size-1440p">...MB</span>
+	  </button>
+	  <button class="download-button" data-format="1080p">
+	  <span class="btnlabel">1080p Video</span>
+	  <span class="size" id="size-1080p">...MB</span>
+	  </button>
+	  <button class="download-button" data-format="720p">
+	  <span class="btnlabel">720p Video</span>
+	  <span class="size" id="size-720p">...MB</span></button>
+	  <button class="download-button" data-format="480p">
+	  <span class="btnlabel">480p Video</span>
+	  <span class="size" id="size-480p">...MB</span></button>
+	  <hr />
+	  <button class="download-button" data-format="m4a">
+	  <span class="btnlabel">&#9826 M4A Music &#9826</span>
+	  <span class="size" id="size-m4a">...MB</span></button>
+	  <button class="download-button" data-format="mp3">
+	  <span class="btnlabel">MP3 Music</span>
+	  <span class="size" id="size-mp3">...MB</span></button>
+	</div>
+	
+	<!-- Shows if the URL is detected as being a non-YouTube video - Generic options that should work on most sites -->
+	<div id="genericOptions" style="display: none; ">
+	  <h4>Non-YouTube site detected.<br><br>
+	      Before downloading, make sure the current site's URL actually contains a video URL.</h4>
+	  <button class="download-button" data-format="bestGENERIC">
+	  <span class="btnlabel">Best Video</span>
+	  <span class="size" id="size-bestGENERIC">...MB</span></button>
+	  <button class="download-button" data-format="2160pGENERIC">
+	  <span class="btnlabel">4K Video</span>
+	  <span class="size" id="size-2160pGENERIC">...MB</span></button>
+	  <button class="download-button" data-format="1440pGENERIC">
+	  <span class="btnlabel">1440p Video</span>
+	  <span class="size" id="size-1440pGENERIC">...MB</span></button>
+	  <button class="download-button" data-format="1080pGENERIC">
+	  <span class="btnlabel">1080p Video</span>
+	  <span class="size" id="size-1080pGENERIC">...MB</span></button>
+	  <button class="download-button" data-format="720pGENERIC">
+	  <span class="btnlabel">720p Video</span>
+	  <span class="size" id="size-720pGENERIC">...MB</span></button>
+	  <button class="download-button" data-format="480pGENERIC">
+	  <span class="btnlabel">480p Video</span>
+	  <span class="size" id="size-480pGENERIC">...MB</span></button>
+	  <hr />
+	  <button class="download-button" data-format="m4aGENERIC">
+	  <span class="btnlabel">&#9826 M4A Music &#9826</span>
+	  <span class="size" id="size-m4aGENERIC">...MB</span></button>
+	  <button class="download-button" data-format="mp3GENERIC">
+	  <span class="btnlabel">MP3 Music</span>
+	  <span class="size" id="size-mp3GENERIC">...MB</span></button>
+	</div>
+	
+	<!-- Text button that opens more download options - JS handles exactly which ones to show -->
+    <div id="toggleMoreBtnz" style="display: none; ">
+	  <hr>
+	  <button id="toggleMoreBtn" style="display: none; ">More Download Options ⯈</button>
+	</div>
+	<div id="moreOptions", style="display: none; ">
+	  <div id="extraYTDownloads", style="display: none; ">
+	    <button class="download-button" data-format="360p">
+	  <span class="btnlabel">360p Video</span>
+	  <span class="size" id="size-360p">...MB</span></button>
+	    <button class="download-button" data-format="240p">
+	  <span class="btnlabel">240p Video</span>
+	  <span class="size" id="size-240p">...MB</span></button>
+	    <button class="download-button" data-format="144p">
+	  <span class="btnlabel">144p Video</span>
+	  <span class="size" id="size-144p">...MB</span></button>
+	  </div>
+	  
+	</div>
+  <hr />
+  <p id="status">Ready</p>
+  <p id="notice1" style="display: none; "></p>
+  <p id="notice2" style="display: none; "></p>
+  <script src="popup.js"></script>
+</body>
+</html>

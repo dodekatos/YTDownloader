@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Manual Download</title>
+  <link rel="icon" href="/icons/icon-32.png" type="image/x-icon">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 10px auto; padding: 20px; line-height: 1.5; background-color: #121212; color: #fff; }
+    h2 { margin-bottom: 12px; }
+    .input-container { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+	input[type="text"] { flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; }
+    #popupFrame { width: 456px; height: 600px; display: none; margin-top: 16px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    #errorMsg { color: #c00; font-size: 13px; display: none; }
+  </style>
+</head>
+<body>
+  <h2>Manual Download</h2>
+  <p>Enter a <u><strong>valid video URL</strong></u> here and it will display download options.</p>
+  <p>It should work exactly the same as though you were normally using the download panel. This is admittedly a pretty niche use case.</p>
+  <div class="input-container">
+    <input id="manualUrl" type="text" placeholder="Paste or type a valid URL here..." autocomplete="off">
+  </div>
+  <div id="errorMsg"></div>
+  <iframe id="popupFrame"></iframe>
+
+  <script src="manualdownload.js"></script>
+</body>
+</html>

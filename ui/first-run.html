@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 10px auto 40px; padding: 20px; line-height: 1.5; background-color: #5e3749; color: #fff; }
+    h1 { font-size: 1.5em; margin-bottom: 0.5em; }
+	h2 { font-size: 1.3em; margin-bottom: 0.5em; }
+    ol { margin-bottom: 1.5em; }
+    button { padding: 10px 16px; background-color: #4CAF50; border: none; border-radius: 6px; color: white; font-size: 1em; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+	button.cooldown { background-color: #999 !important; cursor: progress !important; pointer-events: none; position: relative; }
+	div.cooldown { background-color: #999 !important; cursor: progress !important; pointer-events: none; position: relative; }
+	.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid #000; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+  <title>YTDownloader Setup</title>
+  <link rel="icon" href="/icons/icon-32.png" type="image/x-icon">
+</head>
+<body>
+  <h1>Thanks for adding YT Downloader!</h1>
+  <p>Here are some things to do:</p>
+  <hr style="margin: 25px auto;">
+  
+  <h1>Download the Native Client</h1>
+  <p>This <strong>must</strong> be done for this addon to work.</p>
+  <button id="check-nc">Check if Native Client is installed</button>
+  <br><br>
+  <div id="nc-result" style="white-space: pre-line; font-size: 18px;"></div>
+  <!-- <button id="download-nc" style="display: none;"><a href="https://github.com/dodekatos/YTDownloader/raw/refs/heads/main/native-client-setup.exe" style="text-decoration: none; color: white;">Download Native Client</a></button> -->
+  <button id="download-nc" style="display: none; margin-top: 10px;">Click to download the Native Client Installer</button>
+  <br>
+  <br>
+  <hr style="margin: 25px auto;">
+  <h1>How to Pin YT Downloader to your toolbar</h1>
+  <p>To make YT Downloader easily accessible, pin it to your Firefox toolbar:</p>
+  <ol>
+    <li>Click the <strong>Extensions</strong> button at the top right of your browser.
+	<br><i style="color: #ffcdcd;">This might be hidden in the <strong>Hamburger</strong> menu &#8801;</i></li>
+    <li>Find <strong>YT Downloader</strong> in the list.</li>
+    <li>Right click, and click the <strong>Pin to Toolbar</strong> button.</li>
+  </ol>
+  <p>(Optional) You can Right Click the addon, click 'Manage Extension', then <strong>Allow</strong> to Run in Private Windows.</p>
+  
+  <hr style="margin: 25px auto;">
+  <h2>What's next? Finish the setup in the Settings page!</h2>
+  <li>You now must check that all Dependencies are installed.</li>
+  <li>You can also change your download location, and enable desktop notifications for when downloads complete!</li>
+  <br>
+  <button id="open-settings">Open Settings</button>
+  
+  <script src="first-run.js"></script>
+</body>
+</html>
