@@ -273,14 +273,17 @@ def check_dependencies():
     return missing
 
 # This is where all the download logic and downloading happens.
-def run_download(url, format_key):
+def run_download(url, format_key, datechecked, pagetype):
     reencode_notice = ""
     missing = check_dependencies()
     if missing:
         log(f"[Error] Missing dependencies: {', '.join(missing)}")
         return {"status": "error", "message": f"Missing: {', '.join(missing)}"}
     
-    output_location = os.path.join(DOWNLOAD_DIR, "%(title).100B.%(ext)s")
+    channelfolder = "%(uploader)s/" if pagetype == "channel" else ""
+    playlistfolder = "%(playlist)s/%(playlist_index)s - " if pagetype in ("playlist", "channelplaylists") else ""
+    date_format = "[%(upload_date>%Y-%m-%d)s] " if datechecked else ""
+    output_location = os.path.join(DOWNLOAD_DIR, f"{channelfolder}{playlistfolder}{date_format}%(title).100B.%(ext)s")
     base_args = [
         YTDLP_PATH,
         url,
@@ -375,7 +378,7 @@ def run_download(url, format_key):
     # This is where it runs the download command!
     log(f"[Info] Running command: {args}")
     try:
-        result = subprocess.run(args, capture_output=True, text=True, check=True, timeout=21600)
+        result = subprocess.run(args, capture_output=True, text=True, check=True, timeout=43200)
         if result.returncode != 0:
             log(f"[Massive Error] Error somewhere in the whole run_download def: {result.stderr}")
             return {"status": "error", "message": result.stderr}
@@ -386,7 +389,7 @@ def run_download(url, format_key):
             return {"status": "error", "success": False, "message": str(e)}
     except subprocess.TimeoutExpired:
         log(f"[Massive Error] Timeout expired on the download command")
-        return {"status": "error", "success": False, "message": "Download command cancelled due to 6 hour timeout"}
+        return {"status": "error", "success": False, "message": "Download command cancelled due to 12 hour timeout"}
 
     
 # Checks what our current YT-DLP version is
@@ -1517,7 +1520,9 @@ def main():
             log("[Info] New download started")
             url = msg.get("url")
             format_key = msg.get("format")
-            result = run_download(url, format_key)
+            datechecked = msg.get("datechecked")
+            pagetype = msg.get("pagetype")
+            result = run_download(url, format_key, datechecked, pagetype)
             if recovery_notice:
                 result["recovery_notice"] = recovery_notice
             send_response(result)
