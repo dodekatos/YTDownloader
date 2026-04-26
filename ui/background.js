@@ -182,10 +182,16 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "startDownload") {
 	console.log("[BGInfo] startDownload called.");
 	
+	if (["playlist", "channelplaylists", "channel"].includes(message.pagetype)) {
+	  showWebNotification("YTDownloader - Large download started", "To stop, exit Firefox or disable then re-enable the addon.");
+	}
+	
     browser.runtime.sendNativeMessage("ytdlp_host", {
       action: "download",
       url: message.url,
-      format: message.format
+      format: message.format,
+	  datechecked: message.datechecked,
+	  pagetype: message.pagetype
     }).then(response => {
       console.log("[BGInfo] Download response:", response);
 	  try {

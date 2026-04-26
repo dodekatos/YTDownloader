@@ -217,8 +217,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   initDependencyTable();
   // Looks like removing await lets me now click the built-in tools buttons, but not the deps' check for updates buttons
   
-  // Todo of low importance: re-figure out how this works and make it not do one at a time because that's really slow
-  
 //  it rewrote it slightly so idk if i should keep this orrrr
 //  because it still works as far as i can tell
 //  
@@ -358,7 +356,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       Notification.requestPermission().then((perm) => {
         if (perm === "granted") {
 		  notificationsMessage.style.display = 'none';
-          new Notification("Notifications enabled!", { body: "You'll now get download status updates even if the popup is closed." });
+          new Notification("YTDownloader - Notifications enabled!", { body: "You'll now get download status updates even if the popup is closed." });
         } else if (perm === "denied") {
 		  notificationsMessage.textContent = "Notifications permissions denied!";
 		  notificationsMessage.style.display = 'inline-block';

@@ -16,7 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. */
 
 console.log("[Popup] Start - popup.js loaded.");
 
-function getYouTubePageType(urlString) {
+function getYouTubePageType(urlString) { // TODO - Make this way neater
   try {
     const url = new URL(urlString);
     const hostname = url.hostname.replace(/^www\./, ""); // Normalise hostname (remove "www.")
@@ -34,6 +34,16 @@ function getYouTubePageType(urlString) {
     if ((hostname === "youtube.com" || hostname === "music.youtube.com") && pathname.startsWith("/playlist")) {
 	  console.log("[PopupInfo] It's a YouTube Playlist.")
       return "playlist";
+    }
+	// Check if it's a YouTube channel's playlists
+    if ((hostname === "youtube.com" || hostname === "music.youtube.com") && /^\/@[^\/]+\/playlists/.test(pathname)) {
+	  console.log("[PopupInfo] It's a YouTube Channel's Playlists.")
+      return "channelplaylists";
+    }
+	// Check if it's a YouTube channel
+    if ((hostname === "youtube.com" || hostname === "music.youtube.com") && pathname.startsWith("/@")) {
+	  console.log("[PopupInfo] It's a YouTube Channel.")
+      return "channel";
     }
 	
     // Check if it's a YouTube video/short/clip
@@ -77,9 +87,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const moreOptions = document.getElementById("moreOptions");
   const youtubeOptions = document.getElementById("youtubeOptions");
   const extraYTDownloads = document.getElementById("extraYTDownloads");
-  const playlistOptions = document.getElementById("playlistOptions");
+  const dateCheckboxDiv = document.getElementById("dateCheckboxDiv");
+  const playlistNotice = document.getElementById("playlistNotice");
+  const channelPlaylistNotice = document.getElementById("channelPlaylistNotice");
+  const channelNotice = document.getElementById("channelNotice");
   const genericOptions = document.getElementById("genericOptions");
   const toggleBtnz = document.getElementById("toggleMoreBtnz");
+  const dateCheckbox = document.getElementById("dateCheckbox");
   
   
   const buttons = document.querySelectorAll(".download-button");
@@ -140,6 +154,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const parsed = new URL(url);
 	  // oops the below caused playlists to not work
       //parsed.searchParams.delete("list"); // Safely remove ?list=... or &list=...
+	  // vv This should be ^^ but better
+	  if (parsed.searchParams.size > 1) {
+        parsed.searchParams.delete("list");
+      }
+	  
       parsed.searchParams.delete("index"); // Safely remove ?index=... or &index=...
       parsed.searchParams.delete("start_radio"); // Safely remove ?start_radio=... or &start_radio=...
       return parsed.toString();
@@ -173,38 +192,62 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Default all options to Hidden
   youtubeOptions.style.display = "none";
-  playlistOptions.style.display = "none";
+  playlistNotice.style.display = "none";
+  channelPlaylistNotice.style.display = "none";
+  channelNotice.style.display = "none";
   genericOptions.style.display = "none";
   estimateBtn.style.color = "#ffffff";
+  estimateBtn.disabled = false;
+  
+  dateCheckbox.addEventListener("change", () => {
+	if (document.getElementById('dateCheckbox').checked) {
+	console.log("[PopupInfo] date ticked: " + dateCheckbox.checked)
+	} else {
+	  console.log("[PopupInfo] date unticked: " + dateCheckbox.checked);
+	}
+  });
   
   // Get current tab
   getCurrentUrl().then(currentUrl => {
 	const pageType = getYouTubePageType(currentUrl);
 	
-	if(pageType === "video") { // Show YT-optimised options + Extra YT-only qualities (+amv)
+	// Universal things to show
+	toggleBtnz.style.display = "block";
+	toggleBtn.style.display = "block";
+	dateCheckboxDiv.style.display = "block";
+	
+	if (pageType === "video") { // Show YT-optimised options + Extra YT-only qualities
 	  youtubeOptions.style.display = "block";
-	  toggleBtnz.style.display = "block";
-	  toggleBtn.style.display = "block";
 	  extraYTDownloads.style.display = "block";
 	} else if (pageType === "playlist") { // Show YT-optimised options + Playlist text info
-	  playlistOptions.style.display = "block";
+	  playlistNotice.style.display = "block";
 	  estimateBtn.style.color = "#121212";
+	  estimateBtn.disabled = true;
 	  youtubeOptions.style.display = "block";
-	  toggleBtnz.style.display = "block";
-	  toggleBtn.style.display = "block";
+	  extraYTDownloads.style.display = "block";
+    } else if (pageType === "channelplaylists") {
+	  channelPlaylistNotice.style.display = "block";
+	  estimateBtn.style.color = "#121212";
+	  estimateBtn.disabled = true;
+	  youtubeOptions.style.display = "block";
+	  extraYTDownloads.style.display = "block";
+    } else if (pageType === "channel") {
+	  channelNotice.style.display = "block";
+	  estimateBtn.style.color = "#121212";
+	  estimateBtn.disabled = true;
+	  youtubeOptions.style.display = "block";
 	  extraYTDownloads.style.display = "block";
     } else {
 	  genericOptions.style.display = "block"; // Show generic options
-	  //toggleBtnz.style.display = "block";
-	  //toggleBtn.style.display = "block";
 	}
 	
     // Grab file size of each download option for the current url, if possible
 	estimateBtn.addEventListener("click", () => {
-	  if (pageType === "playlist") {
+	  if (["playlist", "channelplaylists", "channel"].includes(pageType)) {
+		// This should not be possible to trigger because the estimate button should be hidden and unclickable when ^ criteria is met
 		notice0.style.display = "block";
-        notice0.textContent = "Can't estimate file size for playlist URLs."
-	  } else if (pageType != "playlist") {
+        notice0.textContent = "Can't estimate file size for this URL type."
+	  } else {
 		// Button cooldown
 		if (cooldown2) return;
 		cooldown2 = true;
@@ -213,42 +256,41 @@ document.addEventListener("DOMContentLoaded", () => {
 		spinner.classList.add("spinnerlight");
 		estimateBtn.appendChild(spinner);
 		
-		  console.log("[PopupInfo] Got to video file size query")
-		  notice0.style.display = "block";
-          notice0.textContent = "Fetching estimated file sizes.."
-	      //const url = fixIfYtUrl(tabs[0].url);
-		  const url = fixIfYtUrl(currentUrl);
-		  /* console.log("[TempInfo] url: " + url) */
-          browser.runtime.sendMessage({
-            action: "get_file_sizes",
-            url: url
-          }, (response) => {
-            if (!response || response.error || (typeof response === 'object' && Object.keys(response).length === 0 && response.constructor === Object)) {
-			  notice0.style.display = "block";
-			  notice0.textContent = "Unable to estimate file sizes. This can be normal for non-YouTube sites, but double check the URL anyways.";
-              console.log("[PopupError] Error getting file sizes");
-			  removeCooldown2();
-              return;
-            }
-            //console.log("[PopupInfo] Video file size response: " + response)
-	        for (let i = 0; i < sizers.length; i++) {
-			  sizers[i].classList.add("showsize");
-			}
-			
-            // Loop through all keys in the response and update corresponding elements
-            Object.entries(response).forEach(([formatKey, size]) => {
-              const sizeElement = document.getElementById(`size-${formatKey}`); // TODO IMPORTANT <=====================================================
-              if (sizeElement && size) {
-		        //console.log(formatKey + " - " + size) // If you want to log each file size for excessive debugging
-                sizeElement.textContent = size;
-              }
-            });
-		    console.log("[PopupInfo] Successfully found file sizes.")
-		    notice0.style.display = "block";
-		    notice0.textContent = "Successfully found file sizes."
+		console.log("[PopupInfo] Got to video file size query")
+		notice0.style.display = "block";
+        notice0.textContent = "Fetching estimated file sizes.."
+	    //const url = fixIfYtUrl(tabs[0].url);
+		const url = fixIfYtUrl(currentUrl);
+		/* console.log("[TempInfo] url: " + url) */
+        browser.runtime.sendMessage({
+          action: "get_file_sizes",
+          url: url
+        }, (response) => {
+          if (!response || response.error || (typeof response === 'object' && Object.keys(response).length === 0 && response.constructor === Object)) {
+			notice0.style.display = "block";
+			notice0.textContent = "Unable to estimate file sizes. This can be normal for non-YouTube sites, but double check the URL anyways.";
+            console.log("[PopupError] Error getting file sizes");
 			removeCooldown2();
+            return;
+          }
+          //console.log("[PopupInfo] Video file size response: " + response)
+	      for (let i = 0; i < sizers.length; i++) {
+			sizers[i].classList.add("showsize");
+		  }
+		  
+          // Loop through all keys in the response and update corresponding elements
+          Object.entries(response).forEach(([formatKey, size]) => {
+            const sizeElement = document.getElementById(`size-${formatKey}`); // TODO IMPORTANT <=====================================================
+            if (sizeElement && size) {
+		      //console.log(formatKey + " - " + size) // If you want to log each file size for excessive debugging
+              sizeElement.textContent = size;
+            }
           });
-        //});
+		  console.log("[PopupInfo] Successfully found file sizes.")
+		  notice0.style.display = "block";
+		  notice0.textContent = "Successfully found file sizes."
+		  removeCooldown2();
+        });
       };
 	});
   });
@@ -291,13 +333,19 @@ document.addEventListener("DOMContentLoaded", () => {
 	  // Get URL
 	  getCurrentUrl().then(currentUrl => {
 		const url = fixIfYtUrl(currentUrl);
+		const datechecked = dateCheckbox.checked;
+		console.log("[TempPopupInfo] datechecked is: " + datechecked)
+		const pageType = getYouTubePageType(currentUrl);
+		console.log("[TempPopupInfo] pageType is: " + pageType)
 		status.textContent = "Downloading...";
 		
 		// Send download message
 		browser.runtime.sendMessage({
 		  action: "startDownload",
 		  url: url,
-		  format: format
+		  format: format,
+		  datechecked: datechecked,
+		  pagetype: pageType
 		}).then(response => {
 		  if (response.status === "success") {
 			status.textContent = "✔ Download complete!";

@@ -41,13 +41,24 @@
   
   <p id="notice0" style="display: none; ">Waiting to fetch file sizes..</p>
     
-	<!-- Shows if the URL is detected as being a YouTube Playlist - YouTube-optimised options, minus estimated file sizes -->
-	<div id="playlistOptions" style="display: none; ">
+	<!-- Shows if the URL is detected as being a YouTube Playlist -->
+	<div id="playlistNotice" style="display: none; ">
 	  <p>YouTube Playlist detected.</p>
-	  <p style="margin: -5px 0">Clicking any of the download options will immediately download the whole playlist at the chosen option.</p>
-	  <p>Private playlists will not work - only Public/Unlisted will work.</p>
+	  <p style="margin: -5px 0">Clicking any of the download options will download the whole playlist to a folder in your Downloads.</p>
+	  <p>Only Public or Unlisted playlists will work.</p>
 	</div>
-	<!-- These two are intentionally similar! Playlist options are intentionally missing size estimations!! -->
+	<!-- Shows if the URL is detected as being a YouTube Channel's Playlist Page -->
+	<div id="channelPlaylistNotice" style="display: none; ">
+	  <p>⚠️ YouTube Channel's Playlist Page detected ⚠️</p>
+	  <p style="margin: -5px 0">Clicking any of the download options will download ALL PLAYLISTS HERE!</p>
+	  <p>To cancel this download, either restart Firefox or disable then re-enable the addon.</p>
+	</div>
+	<!-- Shows if the URL is detected as being a YouTube Channel -->
+	<div id="channelNotice" style="display: none; ">
+	  <p>⚠️⚠️ YouTube Channel detected ⚠️⚠️</p>
+	  <p style="margin: -5px 0">Clicking any of the download options will download ALL VIDEOS UPLOADED TO THIS CHANNEL!</p>
+	  <p>To cancel this download, either restart Firefox or disable then re-enable the addon.</p>
+	</div>
 	
 	<!-- Shows if the URL is detected as being a YouTube video - YouTube-optimised options -->
     <div id="youtubeOptions" style="display: none; ">
@@ -129,7 +140,9 @@
 	  <span class="btnlabel">144p Video</span>
 	  <span class="size" id="size-144p">...MB</span></button>
 	  </div>
-	  
+	  <div id="dateCheckboxDiv", style="display:none; ">
+	    <input type="checkbox" id="dateCheckbox" name="dateCheckbox" /> <label for="dateCheckbox", style="user-select: none;"> Include upload date in file name</label>
+	  </div>
 	</div>
   <hr />
   <p id="status">Ready</p>
