@@ -20,8 +20,8 @@
 
 [Setup]
 AppName=YTDownloader Native Host
-AppVersion=0.5.0
-VersionInfoVersion=0.0.5.0
+AppVersion=0.5.3
+VersionInfoVersion=0.0.5.3
 DefaultDirName={commonappdata}\YTDownloader
 DisableDirPage=yes
 DisableProgramGroupPage=yes

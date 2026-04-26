@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Downloader",
-  "version": "0.5.0",
+  "version": "0.5.3",
   "description": "Download videos and audio using YTDLP via native app",
   "permissions": ["nativeMessaging", "activeTab", "scripting", "storage"],
   "host_permissions": ["<all_urls>"],
