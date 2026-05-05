@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       autoupdatetoggle.checked = true;
       console.log("Will auto update weekly");
     }
-  
+    
     // Add event listener for the toggle
     autoupdatetoggle.addEventListener("change", () => {
       const isChecked = autoupdatetoggle.checked;

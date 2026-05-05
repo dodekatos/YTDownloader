@@ -94,13 +94,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const genericOptions = document.getElementById("genericOptions");
   const toggleBtnz = document.getElementById("toggleMoreBtnz");
   const dateCheckbox = document.getElementById("dateCheckbox");
-  
+  const cropCheckbox = document.getElementById("cropCheckbox");
+  const cropInputSpan = document.getElementById("cropInputSpan");
+  const cropStart = document.getElementById("cropStart");
+  const cropEnd = document.getElementById("cropEnd");
   
   const buttons = document.querySelectorAll(".download-button");
   
-  const themeToggle = document.getElementById("theme-toggle");
   const settingsButton = document.getElementById("settings-button");
-  const storedTheme = localStorage.getItem("theme");
   
   const estimateBtn = document.getElementById("estimateBtn");
   const sizers = document.getElementsByClassName("size");
@@ -168,21 +169,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   
-  // Load theme on startup
-  if (storedTheme === "light") {
-    document.body.classList.add("light-mode");
-    themeToggle.textContent = "☀️";
-  } else {
-    document.body.classList.remove("light-mode");
-    themeToggle.textContent = "🌙";
-  }
-  // Toggle theme
-  themeToggle.addEventListener("click", () => {
-    const isLight = document.body.classList.toggle("light-mode");
-    localStorage.setItem("theme", isLight ? "light" : "dark");
-    themeToggle.textContent = isLight ? "☀️" : "🌙";
-  });
-  
   // Settings button behavior
   settingsButton.addEventListener("click", () => {
     browser.runtime.openOptionsPage();
@@ -198,13 +184,30 @@ document.addEventListener("DOMContentLoaded", () => {
   genericOptions.style.display = "none";
   estimateBtn.style.color = "#ffffff";
   estimateBtn.disabled = false;
+  cropInputSpan.style.display = "none";
   
   dateCheckbox.addEventListener("change", () => {
-	if (document.getElementById('dateCheckbox').checked) {
-	console.log("[PopupInfo] date ticked: " + dateCheckbox.checked)
+	if (dateCheckbox.checked) {
+	 console.log("[PopupInfo] date ticked: " + dateCheckbox.checked)
 	} else {
 	  console.log("[PopupInfo] date unticked: " + dateCheckbox.checked);
 	}
+  });
+  cropCheckbox.addEventListener("change", () => {
+	if (cropCheckbox.checked) {
+	  console.log("[PopupInfo] crop ticked: " + cropCheckbox.checked)
+	  cropInputSpan.style.display = "inline-block";
+	} else {
+	  console.log("[PopupInfo] crop unticked: " + cropCheckbox.checked);
+	  cropInputSpan.style.display = "none";
+	}
+  });
+  
+  cropStart.addEventListener('input', () => {
+	console.log("[TempInfo] cropStart is: " + cropStart.value);
+  });
+  cropEnd.addEventListener('input', () => {
+	console.log("[TempInfo] cropEnd is: " + cropEnd.value);
   });
   
   // Get current tab
@@ -215,6 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	toggleBtnz.style.display = "block";
 	toggleBtn.style.display = "block";
 	dateCheckboxDiv.style.display = "block";
+	cropCheckboxDiv.style.display = "block";
 	
 	if (pageType === "video") { // Show YT-optimised options + Extra YT-only qualities
 	  youtubeOptions.style.display = "block";
@@ -239,6 +243,8 @@ document.addEventListener("DOMContentLoaded", () => {
 	  extraYTDownloads.style.display = "block";
     } else {
 	  genericOptions.style.display = "block"; // Show generic options
+	  estimateBtn.style.color = "#121212";
+	  estimateBtn.disabled = true;
 	}
 	
     // Grab file size of each download option for the current url, if possible
@@ -335,6 +341,10 @@ document.addEventListener("DOMContentLoaded", () => {
 		const url = fixIfYtUrl(currentUrl);
 		const datechecked = dateCheckbox.checked;
 		console.log("[TempPopupInfo] datechecked is: " + datechecked)
+		const cropchecked = cropCheckbox.checked;
+		console.log("[TempPopupInfo] cropchecked is: " + cropchecked)
+		console.log("[TempPopupInfo] cropstart right before being sent is: " + cropStart.value)
+		console.log("[TempPopupInfo] cropend right before being sent is: " + cropEnd.value)
 		const pageType = getYouTubePageType(currentUrl);
 		console.log("[TempPopupInfo] pageType is: " + pageType)
 		status.textContent = "Downloading...";
@@ -342,10 +352,13 @@ document.addEventListener("DOMContentLoaded", () => {
 		// Send download message
 		browser.runtime.sendMessage({
 		  action: "startDownload",
-		  url: url,
-		  format: format,
-		  datechecked: datechecked,
-		  pagetype: pageType
+		  url,
+		  format,
+		  datechecked,
+		  pagetype: pageType,
+		  cropchecked,
+		  cropstart: cropStart.value,
+		  cropend: cropEnd.value
 		}).then(response => {
 		  if (response.status === "success") {
 			status.textContent = "✔ Download complete!";

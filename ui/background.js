@@ -138,6 +138,9 @@ async function runUpdateIfNeeded() {
 }
 // This *should* only run once, 3 seconds after Firefox starts up to allow a small bit of time for CPU resources to be less contended
 
+// TODO - It might run every time the addon is used since Firefox might end background.js after a period of inactivity..
+// but inspecting the addon's console keeps it running, making it difficult to figure out...
+
 browser.storage.local.get("autoUpdateOptedOut").then((result) => {
   const optedout = result.autoUpdateOptedOut;
   if (optedout === "true") {
@@ -191,7 +194,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       url: message.url,
       format: message.format,
 	  datechecked: message.datechecked,
-	  pagetype: message.pagetype
+	  pagetype: message.pagetype,
+	  cropchecked: message.cropchecked,
+	  cropstart: message.cropstart,
+	  cropend: message.cropend
     }).then(response => {
       console.log("[BGInfo] Download response:", response);
 	  try {
