@@ -167,16 +167,15 @@ def log_old(msg: str) -> None:
         log2.warning(f"Failed to truncate log: {str(e)}")
 
 
-
-# vv At some point move this into some piece of code that only gets run when re-encoding is being run.
-# vv Currently it runs every time the script is run, which might add a tiny bit of latency to each command.
-limited_threads = 5
-try:
-    cpu_count = multiprocessing.cpu_count()
-    limited_threads = max(1, round(int(cpu_count * 0.58))) # Rounds to the nearest integer
-except Exception as e:
-    log(f"[Error] Failed to fetch how many threads the CPU has: {e}")
-    log(f"[Info-Error] Default CPU assumed: 4 core, 8 thread CPU (thus, maximum of 5 threads will be used for re-encoding)")
+def limited_threads():
+    try:
+        cpu_count = multiprocessing.cpu_count()
+        limited_threads = max(1, round(int(cpu_count * 0.58))) # Rounds to the nearest integer
+        return limited_threads
+    except Exception as e:
+        log(f"[Error] Failed to fetch how many threads the CPU has: {e}")
+        log(f"[Info-Error] Default CPU assumed: 4 core, 8 thread CPU (thus, maximum of 5 threads will be used for re-encoding)")
+        return "5"
 
 # This is used to load the config.json file which is located at C:\ProgramData\YTDownloader\native_host\config.json
 DEFAULT_DOWNLOAD_DIR = os.path.join(os.environ["USERPROFILE"], "Downloads")
@@ -186,14 +185,6 @@ def create_default_config():
     return {
         "download_dir": DEFAULT_DOWNLOAD_DIR
     }
-
-# Checks if a path is valid
-def is_valid_path(path):
-    return os.path.isdir(path)
-    
-def is_invalid_path(path):
-    if os.path.isdir(path):
-        return False
 
 # Updates the config with new config
 def save_config(config):
@@ -217,7 +208,7 @@ def load_config():
             config = json.load(f)
         config_dir = config["download_dir"]
 
-        if "download_dir" not in config or is_invalid_path(config["download_dir"]):
+        if "download_dir" not in config or not os.path.isdir(config["download_dir"]):
         #if "download_dir" not in config:
             log(f"[Error] Temporary log: {config}")
             log("[Error] Invalid or missing 'download_dir'. Reverting to default.")
@@ -273,7 +264,7 @@ def check_dependencies():
     return missing
 
 # This is where all the download logic and downloading happens.
-def run_download(url, format_key, datechecked, pagetype):
+def run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart, cropend):
     reencode_notice = ""
     missing = check_dependencies()
     if missing:
@@ -290,6 +281,11 @@ def run_download(url, format_key, datechecked, pagetype):
         "--no-playlist", "--no-mtime", "--add-metadata", "--force-ipv4",
         "--ffmpeg-location", os.path.dirname(FFMPEG_PATH)
     ]
+    if cropchecked:
+        base_args = base_args + [
+            "--download-sections", f"*{cropstart}-{cropend}"
+        ]
+    #log(f"[TempInfo] Base args: {base_args}")
     
     def bestreplace(format_key):
         char_remove = ['p', 'GENERIC']
@@ -470,29 +466,30 @@ def get_file_sizes(url):
             return {"error": "Failed to fetch info"}
         
         info = json.loads(result.stdout)
-        #log(f"[TempInfo] file sizes json dump: {info}") # TEMPORARY, REMOVE AFTER TESTING IS DONE <========================================================
+        #log(f"[TempInfo] file sizes json dump: {info}") # TEMPORARY, COMMENT OUT AFTER TESTING IS DONE <=======
         formats = info.get("formats", [])
         format_sizes = {}
         
         # --- Find best M4A audio filesize ---
         audio_streams = [
             f for f in formats
-            if f.get("vcodec") == "none" and f.get("acodec") == "mp4a.40.2" and f.get("filesize")
+            if f.get("vcodec") == "none" and f.get("acodec") == "mp4a.40.2" and (f.get("filesize") or f.get("filesize_approx"))
         ]
         best_audio = max(audio_streams, key=lambda f: f.get("abr", 0), default=None)
-        audio_size = best_audio.get("filesize") if best_audio else 0
+        #audio_size = best_audio.get("filesize") if best_audio else best_audio.get("filesize_approx") or 0
+        audio_size = best_audio.get("filesize", best_audio.get("filesize_approx", 0)) or 0 # this is cleaner than ^ and should work the same
         
         # --- Utility to fetch best matching video filesize ---
         def get_best_video_size(condition_fn):
             video_streams = [
                 f for f in formats
-                if f.get("acodec") == "none" and f.get("vcodec") != "none" and f.get("filesize") and condition_fn(f)
+                if f.get("acodec") == "none" and f.get("vcodec") != "none" and (f.get("filesize") or f.get("filesize_approx")) and condition_fn(f)
             ]
             if not video_streams:
                 return None
             # Pick highest resolution match
             best = max(video_streams, key=lambda f: f.get("height") or 0)
-            return best["filesize"]
+            return best["filesize"] or best["filesize_approx"]
         
         # --- Define all the smart formats ---
         smart_formats = {
@@ -544,6 +541,8 @@ def get_file_sizes(url):
                 amv_2 = float(amv_1.replace("MB", "").strip())
             elif "GB" in amv_1:
                 amv_2 = float(amv_1.replace("GB", "").strip()) * 1000
+            else:
+                amv_2 = 0
             amv_3 = int(amv_2) * 1.62 * 1024 * 1024
             format_sizes["amv"] = format_bytes(amv_3)
             
@@ -603,7 +602,7 @@ def get_latest_ffmpeg_info():
     assets = data.get("assets", [])
     build = next((a for a in assets if "full_build-shared" in a["name"] and a["name"].endswith(".zip")), None)
     
-    if not build: # TODO: Change this to be in line with how it should actually work jeez
+    if not build:
         raise RuntimeError("Could not find FFmpeg shared build asset on GitHub.")
 
     return {
@@ -652,8 +651,6 @@ def calc_sha256(filepath):
 # Checks if an FFMPEG update is available, comparing against the current version
 def check_ffmpeg_update_available():
     try:
-        #log("[Info] Checking for FFmpeg updates.") # unnecessary extra log
-        
         local_version = get_local_ffmpeg_version()
         latest = get_latest_ffmpeg_info()
         
@@ -767,6 +764,7 @@ def update_ffmpeg():
                 shutil.rmtree(FFMPEG_UPDATING_DIR, ignore_errors=True)
         except Exception as e2:
             log(f"[Error inside an error] Failed to remove the temporary FFMPEG updating directory: {e2}")
+            return {"status": "error", "success": False, "error": str(e2)}
         return {"status": "error", "success": False, "error": str(e)}
 
 # ------ New whole Re-encode Tool bit ------
@@ -863,7 +861,7 @@ def probe_file(path):
             "duration": duration,
             "final_bitrate_kbps": final_bitrate_kbps,
             "streams": streams,
-            "cpu_threads": limited_threads,
+            "cpu_threads": limited_threads(),
             "vbitrate_kbps": vbitrate,
             "file_size": file_size,
             "output_location": DOWNLOAD_DIR
@@ -1076,7 +1074,7 @@ def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbp
         cmd += ["-map_metadata", "0"]
     if attach_chapters:
         cmd += ["-map_chapters", "0"]
-    cmd += ["-threads", f"{limited_threads}", out_path]
+    cmd += ["-threads", f"{limited_threads()}", out_path]
     #log(f"[Info] FFMPEG conversion CMD to be run is: {cmd}")
     return cmd
 
@@ -1279,7 +1277,6 @@ def get_local_deno_version():
         match = re.search(r"^deno\s+([\d.]+)", output)
         if match:
             version = match.group(1)
-            #log(f"[Info] Local Deno version: {version}")
             return version
         else:
             log(f"[Error] Could not parse Deno version output: {output}")
@@ -1300,7 +1297,6 @@ def get_latest_deno_version():
             if tag:
                 version = tag.lstrip("vV")  # Remove v or V prefix
                 if re.match(r"^\d+(\.\d+)*$", version):
-                    #log(f"[Info] Latest Deno version: {version}") # moved logging of this higher up in the chain
                     return version
                 else:
                     log(f"[Error] Unexpected Deno version format: {tag}")
@@ -1522,7 +1518,11 @@ def main():
             format_key = msg.get("format")
             datechecked = msg.get("datechecked")
             pagetype = msg.get("pagetype")
-            result = run_download(url, format_key, datechecked, pagetype)
+            cropchecked = msg.get("cropchecked")
+            cropstart = msg.get("cropstart")
+            cropend = msg.get("cropend")
+            log(f"[TempInfo] cropchecked: {cropchecked} cropstart: {cropstart} cropend: {cropend}")
+            result = run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart, cropend)
             if recovery_notice:
                 result["recovery_notice"] = recovery_notice
             send_response(result)
@@ -1531,7 +1531,7 @@ def main():
         elif action == "update_config":
             new_config = msg.get("config", {})
             try:
-                if is_valid_path(new_config["download_dir"]):
+                if os.path.isdir(new_config["download_dir"]):
                     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
                     save_config(new_config)
                     log(f"Config updated: {new_config}")
