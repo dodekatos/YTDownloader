@@ -3,9 +3,9 @@
 A lightweight and privacy friendly browser extension (currently just Firefox) that utilises [YT-DLP](https://github.com/yt-dlp/yt-dlp) to download video and audio from websites via a simple popup in Firefox's toolbar.  
 The popup interacts with a Native Client to run YT-DLP and serve other functions.
 
-The extension includes a simple video and audio re-encoding tool that makes use of FFmpeg and FFprobe. All re-encoding happens locally on your PC with either CPU or GPU acceleration.
+The extension includes a video and audio Re-encoding Tool that makes use of FFmpeg and FFprobe. All re-encoding happens entirely locally on your PC with either CPU or GPU acceleration.
 
-The extension also includes a Settings page where you can easily update all dependencies (YT-DLP, FFmpeg, Native Client), read update notes, and do various other things.
+The extension also includes a Settings page where you can manually update all dependencies (YT-DLP, FFmpeg, Native Client), read update notes, and do various other things.
 
 ## Installation
 - (Recommended) The extension is available on the [Firefox Add-on Store](https://addons.mozilla.org/en-GB/firefox/addon/ytdownloader-dodekatos/) - Simply add it and follow the installation instructions.
@@ -15,19 +15,21 @@ The extension also includes a Settings page where you can easily update all depe
 I'd recommend using the Firefox Add-on Store as it has automatic updates.
 
 ## Requirements
-- Firefox 112.0 or newer (April 2023+)
+- Firefox 142.0 or newer (August 2025+)
 - Windows 10/11 (64-bit only)
 - Administrator is not required. You can optionally add a Windows Defender exception for the Native Client if your antivirus has issues with it. 
 
 ## Support
-This is essentially just a personal project that I'm sharing among some friends.  
-If you've otherwise stumbled upon this, you're welcome to create an [Issue](https://github.com/dodekatos/YTDownloader/issues) or [Pull Request](https://github.com/dodekatos/YTDownloader/pulls), describe your issue, and provide any relevant useful information. But again, as this is a personal project, I cannot guarantee any level of support, nor make any non-critical changes.
+This is a personal project that I'm sharing among some friends, so while I cannot guarantee any level of support or non-critical feature changes, you're welcome to create an [Issue](https://github.com/dodekatos/YTDownloader/issues) or [Pull Request](https://github.com/dodekatos/YTDownloader/pulls), describe your issue, and provide any relevant useful information.
 
 ## Privacy
 YTDownloader **does not** and **does not want to** collect or transmit any of your personal data. The closest it gets to that is:
 - The **locally stored** log file at C:\ProgramData\YTDownloader\log.txt will contain file paths for *your* debugging purposes
 - YT-DLP obviously accesses the internet to download video/audio, but it does not use/affect any of your browser's cookies for this purpose
 - Firefox collects your Firefox version, addon version, language, operating system, daily Firefox usage pings, and mostly-anonymously aggregates this information to addon creators in their addon's statistics dashboard.
+
+## AI Usage
+I make use of LLMs to help develop this addon, but I review and test everything they output.
 
 ## License
 YTDownloader is licensed under the **GNU General Public License v3.0** (GPL-3.0), a CopyLeft and Open Source friendly license.
