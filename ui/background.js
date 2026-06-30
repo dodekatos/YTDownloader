@@ -197,7 +197,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	  pagetype: message.pagetype,
 	  cropchecked: message.cropchecked,
 	  cropstart: message.cropstart,
-	  cropend: message.cropend
+	  cropend: message.cropend,
+	  numberingchecked: message.numberingchecked
     }).then(response => {
       console.log("[BGInfo] Download response:", response);
 	  try {

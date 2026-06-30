@@ -40,13 +40,38 @@
   <h3 class="checkYourDepsNotice">You should check the Settings page for any dependency updates.</h3>
   <button id="settingsButton" style="display: flex; margin: 10px auto -15px;">Open Settings</button><br><br>
   
-  <h2 class="currentver">V0.5.4</h2><p>2026-05-05 (Current)</p>
+  <h2 class="currentver">V0.6.0</h2><p>2026-06-30 (Current)</p>
+  <ul>
+    <li>Cleaned up the Settings page</li>
+	<li>Popup improvements:</li>
+	<ul>
+      <li>Added a Stop button in the popup that ends all currently running YT-DLP processes</li>
+	  <li>Error messages are now the actual error instead of just the command that was run</li>
+      <li>Added a disclaimer that the popup's clipping option can be a bit inaccurate. This is because when remuxing, FFmpeg uses keyframes instead of exact frames when cropping</li>
+	  <li>File size estimation now works better for vertical videos</li>
+	</ul>
+	<br>
+	<li>Completely remade the Re-encode Tool:</li>
+	<ul>
+	  <li style="color: orange;">The minimum Nvidia driver version is 610+ for NVENC</li>
+	  <li>There is now a queue system, where you can queue many files with individual settings and they will be re-encoded sequentially</li>
+	  <li>You can now select multiple files at once</li>
+	  <li>You can also select folders (It won't include files nested in subfolders)</li>
+      <li>There is now an accurate real-time ETA as the re-encode runs, along with a progress bar</li>
+	  <li>You can now optionally change the output video's FPS and Resolution</li>
+	  <li>There are buttons to clear individual/all pending cards and queued re-encodes.<br>Refreshing or closing the page will also clear and stop everything</li>
+	  <li>Added a custom clipping option. This is only usable when <i>re-encoding</i>, not remuxing</li>
+	  <li>Removed Intel/AMD GPU acceleration because I can't test if it works.<br>Intel/AMD CPU software encoding still works, but Nvidia GPU acceleration is recommended due to its speed</li>
+	</ul>
+  </ul>
+  <br>
+  
+  <h2>V0.5.4</h2><p>2026-05-05</p>
   <ul>
 	<li>Added a custom clipping option in the popup's additional settings</li>
 	<li>Removed 'light mode' because it looked awful</li>
 	<li>Disabled the Estimate File Sizes button for non-YouTube websites because it's never worked for them</li>
   </ul>
-  <br>
   
   <h2>V0.5.3</h2><p>2026-04-26</p>
   <ul>

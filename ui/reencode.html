@@ -1,171 +1,782 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 10px auto; padding: 20px; line-height: 1.5; background-color: #5e3749; color: #fff; }
-    .row { margin-bottom: 8px; }
-	label { display: inline-block; width: 160px; }
-    select, input[type="text"], button { padding: 6px; }
-    #warning { color: #ffa700; margin-top: 6px; display: none; }
-    #result { margin-top: 10px; white-space: pre-wrap; }
-    #fileSummary { font-size: 0.85em; color: #bfbfbf; white-space: pre-line; margin-bottom: 20px; }
-	#fileSummary div { margin-bottom: -24px; font-size: 15px; }
-	
-    .hidden { display: none; }
-	h1 { font-size: 1.5em; margin-bottom: 0.5em; }
-    ol { margin-bottom: 1.5em; }
-    button { padding: 10px 16px; background-color: #4CAF50; border: none; border-radius: 6px; color: white; font-size: 1em; cursor: pointer; }
-    button:hover { background-color: #45a049; }
-	button.cooldown { background-color: #999 !important; cursor: progress !important; pointer-events: none; position: relative; }
-	.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top: 2px solid #000; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-	
-	.quality-option, .hwquality-option { flex: 1; text-align: center; padding: 6px 10px; border: 1px solid #999; border-radius: 8px; cursor: pointer; user-select: none; transition: background-color 0.2s, border-color 0.2s; }
-    .quality-option:hover, .hwquality-option:hover { border-color: #555; }
-    .quality-option.selected { color: white; border-color: #3b82f6; }
-	.qlow { background-color: #00931e; }
-	.qmed { background-color: #3b82f6; }
-	.qhigh { background-color: #b52d60; }
-	.hwquality-option.selected { color: white; border-color: #3b82f6; }
-	.hwcpu { background-color: #a26525; }
-	.hwnvidia { background-color: #67a200; }
-	.hwintel { background-color: #2263a8; }
-	.hwamd { background-color: #b52328; }
-  </style>
-  <title>Re-encoding Tool</title>
-  <link rel="icon" href="/icons/icon-32.png" type="image/x-icon">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Re-encoding Tool</title>
+<style>
+  /* ============================================================
+     Design tokens
+     ============================================================ */
+  :root{
+    --bg-base:      #0D1117;
+    --bg-panel:     #141B23;
+    --bg-raised:    #1B2430;
+    --bg-raised-hi: #232E3C;
+    --border:       #2A3441;
+    --border-soft:  #1F2731;
+
+    --text-primary:   #E6EAF0;
+    --text-secondary: #8B96A5;
+    --text-faint:     #5A6473;
+
+    --accent-video:      #5B8DEF;
+    --accent-video-dim:  #2E4470;
+    --accent-audio:      #E8A33D;
+    --accent-audio-dim:  #6B4F22;
+    --accent-success:    #4CAF7D;
+    --accent-danger:     #E2574C;
+    --accent-danger-dim: #5C2A26;
+
+    --radius-md: 8px;
+    --radius-sm: 5px;
+
+    --font-ui:   -apple-system, "Segoe UI", "Helvetica Neue", Roboto, Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Mono", "Consolas", "SF Mono", "Roboto Mono", monospace;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin: 0;
+    padding: 0;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  body{
+    min-height: 100vh;
+  }
+
+  .app{
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 20px 20px 64px;
+  }
+
+  /* ============================================================
+     Header
+     ============================================================ */
+  .topbar{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--border-soft);
+    flex-wrap: wrap;
+  }
+
+  .topbar-title{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .topbar-title h1{
+    font-size: 17px;
+    font-weight: 650;
+    margin: 0;
+    letter-spacing: 0.2px;
+  }
+
+  .status-led{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    box-shadow: 0 0 0 3px transparent;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+    flex-shrink: 0;
+  }
+  .status-led.connected{ background: var(--accent-success); box-shadow: 0 0 0 3px rgba(76,175,125,0.18); }
+  .status-led.connecting{ background: var(--accent-audio); box-shadow: 0 0 0 3px rgba(232,163,61,0.18); }
+  .status-led.disconnected{ background: var(--accent-danger); box-shadow: 0 0 0 3px rgba(226,87,76,0.18); }
+
+  .status-label{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .topbar-actions{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ============================================================
+     Buttons
+     ============================================================ */
+  button{
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 560;
+    border: 1px solid var(--border);
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+    white-space: nowrap;
+  }
+  button:hover{ background: var(--bg-raised-hi); border-color: #36414F; }
+  button:active{ transform: translateY(1px); }
+  button:focus-visible{ outline: 2px solid var(--accent-video); outline-offset: 2px; }
+  button:disabled{ opacity: 0.45; cursor: not-allowed; }
+
+  button.primary{
+    background: var(--accent-video-dim);
+    border-color: var(--accent-video);
+    color: #DCE6FB;
+  }
+  button.primary:hover{ background: #355590; }
+
+  button.danger{
+    background: var(--accent-danger-dim);
+    border-color: var(--accent-danger);
+    color: #FBE0DD;
+  }
+  button.danger:hover{ background: #79332C; }
+
+  button.ghost{
+    background: transparent;
+    border-color: var(--border);
+  }
+
+  button.icon-btn{
+    padding: 6px 9px;
+    line-height: 1;
+    font-size: 14px;
+  }
+
+  /* ============================================================
+     Sections
+     ============================================================ */
+  section.panel{
+    margin-bottom: 30px;
+  }
+
+  .section-head{
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .section-head h2{
+    font-size: 12px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  .section-count{
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .card-list{
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .empty-state{
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    padding: 22px 18px;
+    color: var(--text-faint);
+    font-size: 13px;
+    text-align: center;
+  }
+  .empty-state strong{ color: var(--text-secondary); }
+
+  /* ============================================================
+     Pending file card
+     ============================================================ */
+  .file-card{
+    background: var(--bg-panel);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+  }
+
+  .file-card-head{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .file-name{
+    font-weight: 600;
+    font-size: 13.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-remove{
+    flex-shrink: 0;
+  }
+
+  .meta-strip{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .meta-chip{
+    padding: 1px 8px 1px 0;
+    position: relative;
+  }
+  .meta-chip:not(:last-child)::after{
+    content: "·";
+    position: absolute;
+    right: 1px;
+    color: var(--text-faint);
+  }
+  .meta-chip.v-domain{ color: #9CB7F5; }
+  .meta-chip.a-domain{ color: #F0C172; }
+  .meta-error{
+    color: var(--accent-danger);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+
+  .config-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .field{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .field label{
+    font-size: 10.5px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+  }
+
+  select, input[type="text"], input[type="number"]{
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 7px 8px;
+    width: 100%;
+  }
+  select:focus-visible, input[type="text"]:focus-visible, input[type="number"]:focus-visible{
+    outline: 2px solid var(--accent-video);
+    outline-offset: 1px;
+  }
+  select:disabled, input[type="text"]:disabled, input[type="number"]:disabled{
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .dims-row{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dims-row input[type="number"]{
+    width: 0; /* let flex distribute evenly */
+    flex: 1;
+    min-width: 0;
+  }
+  .dims-x{
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  .crop-row{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .crop-row input[type="text"]{
+    width: 92px;
+  }
+  .crop-row input[type="number"]{
+    width: 70px;
+  }
+  .fps-hint{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent-audio);
+  }
+
+  .checkbox-row{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .checkbox-row input[type="checkbox"]{
+    accent-color: var(--accent-video);
+    width: 14px;
+    height: 14px;
+  }
+
+  .toggle-rows{
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .file-card-footer{
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* ============================================================
+     Queue items
+     ============================================================ */
+  .queue-item{
+    background: var(--bg-panel);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+  }
+  .queue-item.active{
+    border-color: var(--accent-audio-dim);
+    box-shadow: 0 0 0 1px rgba(232,163,61,0.12);
+  }
+
+  .queue-item-head{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .queue-item-name{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  .queue-glyph{
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+  .queue-item.active .queue-glyph{ color: var(--accent-audio); }
+
+  .queue-filename{
+    font-weight: 600;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .queue-badge{
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  /* --- Two-line settings summary --- */
+  .queue-summary{
+    margin-top: 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .queue-summary-line{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    align-items: center;
+    row-gap: 2px;
+  }
+  .qs-sep{
+    color: var(--text-faint);
+    opacity: 0.45;
+    padding: 0 5px;
+  }
+  .qs-from{ color: var(--text-secondary); }
+  .qs-arrow{ color: var(--text-faint); padding: 0 4px; }
+  .qs-to{ color: var(--accent-video); }
+  .qs-to.copy{ color: var(--text-faint); font-style: italic; }
+  .qs-flag{ color: var(--accent-audio); }
+
+  /* --- Signature element: segmented LED-style progress meter --- */
+  .meter-row{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .meter{
+    flex: 1;
+    display: flex;
+    gap: 2px;
+    height: 16px;
+  }
+
+  .meter-seg{
+    flex: 1;
+    background: var(--bg-raised);
+    border-radius: 1px;
+    transition: background 0.2s ease;
+  }
+  .meter-seg.lit{
+    background: var(--accent-audio);
+  }
+
+  .meter-readout{
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    min-width: 158px;
+    text-align: right;
+  }
+  .meter-readout .pct{
+    color: var(--accent-audio);
+    font-weight: 650;
+  }
+
+  /* ============================================================
+     Toasts (error / info messages)
+     ============================================================ */
+  #toastContainer{
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 50;
+    max-width: 360px;
+  }
+
+  .toast{
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-danger);
+    border-radius: var(--radius-sm);
+    padding: 10px 34px 10px 12px; /* right padding for the ✕ */
+    font-size: 12.5px;
+    color: var(--text-primary);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    animation: toast-in 0.18s ease-out;
+    cursor: pointer;
+    position: relative;
+  }
+  .toast:hover{ background: var(--bg-raised-hi); }
+  .toast::after{
+    content: "✕";
+    position: absolute;
+    top: 9px;
+    right: 10px;
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+  .toast.success{ border-left-color: var(--accent-success); }
+
+  /* Collapsible error body */
+  .toast-body{
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+  .toast-body.expanded{
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+  .toast-expand-btn{
+    display: block;
+    width: 100%;
+    margin-top: 7px;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border-soft);
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 5px 0 0;
+    cursor: pointer;
+    text-align: center;
+    line-height: 1;
+  }
+  .toast-expand-btn:hover{ color: var(--text-primary); }
+
+  /* File size comparison line on success toasts */
+  .toast-size-row{
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-soft);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .toast-size-before{ color: var(--text-secondary); }
+  .toast-size-arrow{ color: var(--text-faint); }
+  .toast-size-after{ color: var(--accent-success); }
+  .toast-size-after.smaller{ color: var(--accent-success); }
+  .toast-size-after.larger{ color: var(--accent-audio); }
+
+  @keyframes toast-in{
+    from{ opacity: 0; transform: translateY(6px); }
+    to{ opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============================================================
+     Responsive
+     ============================================================ */
+  @media (max-width: 560px){
+    .app{ padding: 14px 12px 48px; }
+    .topbar{ flex-direction: column; align-items: flex-start; }
+    .meter-readout{ min-width: 0; }
+  }
+</style>
 </head>
 <body>
-  <h1>Video / Audio Re-encoding Tool</h1>
-  <p>You can use this to re-encode videos or audio into different codecs / formats, making use of FFmpeg entirely locally on your PC.
-  <br>I've tried to foolproof it as much as I could, but it does require an ounce of thinking.</p>
-  
-  <p style="color:orange;">Note: The output file size for some high quality videos might be higher than the source video, I'll fix this in a future update. You should check this after encoding.</p>
-  <br>
-  
-  <div class="row">
-    <button id="pickBtn" style="display: block;">Choose File…</button>
-  </div>
-  
-  <div id="fileSummary" class="row hidden">
-    <div>Selected: <span id="ffselected"></span></div>
-	<div>Container: <span id="ffcontainer"></span></div>
-	<div>Video Resolution: <span id="ffwidth"></span>x<span id="ffheight"></span> @ <span id="fffps"></span>fps</div>
-	<div>Video Codec: <span id="ffvcodec"></span></div>
-	<div>Video Bitrate: <span id="ffvbitrate"></span>MB/s</div>
-	<div>Audio Codec: <span id="ffacodec"></span></div>
-	<div>Audio Bitrate: <span id="ffbitrate"></span>kbps</div>
-	<div>Duration: <span id="ffduration" style="display: none;"></span><span id="ffduration2"></span></div>
-	<div>Total File Size: <span id="ffsize"></span></div>
-	<div style="display: block;">CPU Threads: <span id="ffthreads"></span></div>
-	<div>Output Location: <span id="ffoutputlocation"></span></div>
-  </div>
-  
-  <div id="options" class="hidden">
-    <div class="row">
-      <label>Output Container</label>
-      <select id="containerSel">
-	    <optgroup label="Standard options">
-        <option value=".mkv">.MKV</option>
-        <option value=".mp4">.MP4</option>
-        <option value=".m4a">.M4A - Audio only</option>
-        <option value=".mp3">.MP3 - Audio only</option>
-		</optgroup>
-		<optgroup label="Extra options">
-        <option value=".amv">.AMV</option>
-		</optgroup>
-      </select>
-    </div>
-	<br>
-    <div class="row" id="videoRow">
-      <label>Video codec</label>
-      <select id="videoSel">
-        <option value="copy">Copy from source</option>
-        <option value="libsvtav1">AV1</option>
-        <option value="libx265">H.265</option>
-        <option value="libx264">H.264</option>
-        <option value="none">No video</option>
-        <option value="amv">AMV Video</option>
-      </select>
-    </div>
+  <div class="app">
 
-    <div class="row" id="audioRow">
-      <label>Audio codec</label>
-      <select id="audioSel">
-        <option value="copy">Copy from source</option>
-        <option value="aac">AAC</option>
-        <option value="libmp3lame">MP3</option>
-        <option value="none">No audio</option>
-        <option value="amv" style="display: none;">AMV Audio</option>
-      </select>
-    </div>
-    <div id="warning"></div>
-    <div id="warning2"></div>
-    <div id="warning3"></div>
-	<br>
-	
-	<div id="qualitySelectorContainer" style="margin-top:10px; display:none; flex-direction:column; gap:6px;">
-      <label style="font-weight:500;">Video quality:</label>
-      <div id="qualityOptions" style="display:flex; gap:8px;">
-        <div class="quality-option" data-quality="low">Lower quality</div>
-        <div class="quality-option qmed selected" data-quality="default">Default quality</div>
-        <div class="quality-option" data-quality="high">Higher quality</div>
+    <header class="topbar">
+      <div class="topbar-title">
+        <span class="status-led disconnected" id="statusLed" aria-hidden="true"></span>
+        <h1>Video / Audio Re-encoding Tool</h1>
+        <span class="status-label" id="statusLabel">Disconnected</span>
       </div>
-      <div id="qualityDesc" style="font-size: 14px; color: #c8c8c8;">Recommended for best balance of quality and size</div>
-    <br></div>
-	
-	<div id="hwQualitySelectorContainer" style="margin-top:10px; display:none; flex-direction:column; gap:6px;">
-      <label style="font-weight:500; width: 230px;">Hardware used for encoding:</label>
-      <div id="hwQualityOptions" style="display:flex; gap:8px;">
-        <div class="hwquality-option" data-quality="cpu">CPU</div>
-        <div class="hwquality-option hwnvidia selected" data-quality="nvidia">Nvidia GPU</div>
-        <div class="hwquality-option" data-quality="intel">Intel GPU</div>
-        <div class="hwquality-option" data-quality="amd">AMD GPU</div>
+      <div class="topbar-actions">
+        <button class="ghost" id="addFilesBtn" type="button">Add Files</button>
+        <button class="ghost" id="addFolderBtn" type="button">Add Folder</button>
+        <button class="danger" id="stopAllBtn" type="button">Stop All Encodes</button>
       </div>
-      <div id="hwQualityDesc" style="font-size: 14px; color: #c8c8c8;">Significantly faster than CPU encoding. Recommended if you have an Nvidia GPU.</div>
-    <br></div>
-	
-	<div id="encodeOptions" style="margin-top:10px; display:flex; flex-direction:column; gap:4px; font-size:14px;">
-      <label><input type="checkbox" id="optMetadata" checked> Attach file metadata</label>
-      <label><input type="checkbox" id="optChapters" checked> Attach chapters</label>
-	  
-	  <!-- display was flex, hidden while it's not ready -->
-	  <div id="fpsContainer" style="display: none; flex-direction: column; gap: 4px;"> 
-	    <div style="display: flex; align-items: center; gap: 6px;">
-		  <label style="width: fit-content;"><input type="checkbox" id="changeFpsCheckbox"> Change FPS - <i>Very Experimental</i></label>
-	      <input type="text" id="fpsInput" placeholder="60" style="width: 42px; padding: 3px; border: 1px solid #aaa; border-radius: 4px; display: none; text-align: center;" maxlength="7">
+	  <a style="color: orangered; text-decoration: none;" href="https://www.nvidia.com/en-us/geforce/drivers/" target="_blank" rel="noopener noreferrer">The latest version of FFMPEG requires Nvida GPU Drivers 610+ - If you are getting unexpected errors, update your Nvidia drivers!</a></p>
+    </header>
+
+    <main>
+      <section class="panel" id="queueSection">
+        <div class="section-head">
+          <h2>Processing Queue</h2>
+          <span class="section-count" id="queueCount">0</span>
         </div>
-		<span id="fpsError" style="font-size: 14px; color: red; display: none; background-color: black; width: fit-content; padding: 0 5px; margin-top: 3px;"></span>
-		<span id="fpsInfo" style="font-size: 14px; color: #ecb228; display: none;"></span>
-	  </div>
-	</div><br>
-	
-	<div style="color: #faa;">Very rough ETA: <span id="ffeta">Estimating..</span>
-	<span id="ffetaUpper" style="display: none;"></span>
-	<span id="ffetaMid" style="display: none;"></span>
-	<div style="display: none; color: #ff5400;"> (debug: <span id="ffetaMidFormatted" style="display: inline-block;"></span>)</div> <!-- testing, don't forget to set this to none -->
-	<div style="color: #1de800; display: none;" id="bettereta">Progress: <span id="ffbettereta">Estimating..</span></div>
-	<br><span id="ffetanotice" style="display: none; margin: 7px 0; color: #d7ac5c">Hey! Looks like your encode time is more than 10 minutes! If 
-	you've got a GPU, you might want to consider using GPU encoding instead, for much faster encoding.</span>
-	</div>
-	
-	<div id="encodeTimerContainer" style="display: block;">
-	  <span id="encodeTimer" style="color: #ccc;"></span>
-	  <span id="encodeNotice" style="color: #ffcc00; margin-left: 8px;"></span>
-	</div>
-    
-	<div class="row" style="display: flex;">
-      <button id="startBtn" style="display: block;">Start Re-encode</button>
-	  <button id="cancelBtn" style="display: none; background-color: #ce1c1c; padding: 5px 10px; margin-left: 8px;">&#9940; Stop</button>
-    </div>
-	<span id="cancelInfo" style="display: none; color: #ffef00;">Re-encode has been cancelled.<br>
-	The partially completed output file will not be automatically deleted.</span>
+        <div class="card-list" id="queueList"></div>
+        <div class="empty-state" id="queueEmpty">
+          Nothing queued. Configure a pending file and click <strong>Add to Queue</strong>.
+        </div>
+      </section>
+	  
+	  
+      <section class="panel" id="pendingSection">
+        <div class="section-head">
+          <h2>Pending Files</h2>
+          <span class="section-count" id="pendingCount">0</span>
+          <button class="ghost icon-btn" id="clearPendingBtn" type="button" style="margin-left:auto; font-size:11px; padding:5px 10px;">Clear All</button>
+        </div>
+        <div class="card-list" id="pendingList"></div>
+        <div class="empty-state" id="pendingEmpty">
+          No files selected yet. <strong>Add Files</strong> or <strong>Add Folder</strong> to get started.
+        </div>
+      </section>
+    </main>
+
   </div>
 
-  <div id="result"></div>
-  
-  <br>
+  <div id="toastContainer" aria-live="polite" style="user-select: none;"></div>
+
+  <!-- ============================================================
+       Templates (cloned and populated by reencode.js)
+       ============================================================ -->
+  <template id="pendingCardTemplate">
+    <article class="file-card" data-role="pending-card">
+      <div class="file-card-head">
+        <div class="file-name" data-role="filename"></div>
+        <button class="icon-btn ghost file-remove" data-role="remove-btn" type="button" title="Remove from list">✕</button>
+      </div>
+
+      <div class="meta-strip" data-role="meta-strip"></div>
+
+      <div class="config-grid">
+        <div class="field">
+          <label>Container</label>
+          <select data-role="container" title="Set the container / file name extension to use. MKV is recommended for videos. For audio-only, it's mostly down to personal preference, but MP3 is often better supported on niche products like cheap MP3 players than M4A.">
+            <option value="mkv">MKV</option>
+            <option value="mp4">MP4</option>
+            <option value="m4a">M4A (audio only)</option>
+            <option value="mp3">MP3 (audio only)</option>
+            <option value="amv">AMV</option>
+          </select>
+        </div>
+        <div class="field" data-role="vcodec-field">
+          <label>Video codec</label>
+          <select data-role="vcodec" title="Set the video codec to use. AV1 is the best for compression efficiency, but may not be supported on older hardware. H265 is supported on more hardware, and H264 is supported on pretty much all hardware.">
+            <option value="copy">Copy</option>
+            <option value="libsvtav1" selected>AV1</option>
+            <option value="libx265">H.265</option>
+            <option value="libx264">H.264</option>
+            <option value="none">None (audio only)</option>
+          </select>
+        </div>
+        <div class="field" data-role="acodec-field">
+          <label>Audio codec</label>
+          <select data-role="acodec" title="Set the audio codec to use. Copy is recommended.">
+            <option value="copy">Copy</option>
+            <option value="aac">AAC</option>
+            <option value="libmp3lame">MP3</option>
+            <option value="none">None (video only)</option>
+          </select>
+        </div>
+        <div class="field" data-role="encoder-field">
+          <label>Encoder</label>
+          <select data-role="encoder" title="Select between Nvidia hardware encoder or CPU software encoder">
+            <option value="nvidia">NVIDIA GPU (NVENC)</option>
+            <option value="cpu">CPU</option>
+          </select>
+        </div>
+        <div class="field" data-role="quality-field">
+          <label>Quality</label>
+          <select data-role="quality" title="Sets the CRF/CQ for a balance between quality and file size.">
+            <option value="low">Low</option>
+            <option value="default" selected>Default</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="field" data-role="resolution-field">
+          <label>Resolution</label>
+          <select data-role="resolution-preset">
+            <option value="original" selected>Original</option>
+            <option value="2160">4K (2160p)</option>
+            <option value="1440">1440p</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+            <option value="240">240p</option>
+            <option value="144">144p</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="field" data-role="resolution-dims-field">
+          <label>Width × Height</label>
+          <div class="dims-row">
+            <input type="number" min="16" max="7680" data-role="resolution-width" placeholder="W" disabled>
+            <span class="dims-x">×</span>
+            <input type="number" min="16" max="4320" data-role="resolution-height" placeholder="H" disabled>
+          </div>
+        </div>
+      </div>
+
+      <div class="crop-row">
+        <label class="checkbox-row" title="Clip just this segment of the source file." style="user-select: none;">
+          <input type="checkbox" data-role="crop-enabled">
+          Clip
+        </label>
+        <input type="text" data-role="crop-start" placeholder="00:00:00" inputmode="numeric" disabled>
+        <span style="color:var(--text-faint)">to</span>
+        <input type="text" data-role="crop-end" placeholder="00:00:00" inputmode="numeric" disabled>
+      </div>
+
+      <div class="crop-row" data-role="fps-row">
+        <label class="checkbox-row" title="FPS to re-encode to." style="user-select: none;">
+          <input type="checkbox" data-role="fps-enabled">
+          Custom FPS
+        </label>
+        <input type="number" min="1" max="999" step="1" data-role="fps-value" placeholder="30" disabled>
+        <span class="fps-hint" data-role="fps-hint"></span>
+      </div>
+
+      <div class="crop-row" data-role="gpu-decode-row" hidden>
+        <label class="checkbox-row" title="Decode on the GPU (NVDEC) instead of CPU. At the slight cost of visual accuracy and storage efficiency, it might lower CPU usage a bit, especially when resizing/changing FPS." style="user-select: none;">
+          <input type="checkbox" data-role="gpu-decode-enabled">
+          Decode on GPU too (NVDEC)
+        </label>
+      </div>
+
+      <div class="toggle-rows">
+        <label class="checkbox-row" title="Attach original file's metadata to the re-encoded file." style="user-select: none;">
+          <input type="checkbox" data-role="keep-metadata" checked>
+          Keep metadata
+        </label>
+        <label class="checkbox-row" title="Attach original file's chapters to the re-encoded file." style="user-select: none;">
+          <input type="checkbox" data-role="keep-chapters" checked>
+          Keep chapters
+        </label>
+      </div>
+
+      <div class="file-card-footer">
+        <button class="primary" data-role="add-to-queue-btn" type="button" title="Add this file to the re-encode queue.">Add to Queue →</button>
+      </div>
+    </article>
+  </template>
+
+  <template id="queueItemTemplate">
+    <article class="queue-item" data-role="queue-item">
+      <div class="queue-item-head">
+        <div class="queue-item-name">
+          <span class="queue-glyph" data-role="glyph">⏸</span>
+          <span class="queue-filename" data-role="filename"></span>
+        </div>
+        <span class="queue-badge" data-role="badge">queued</span>
+        <button class="icon-btn ghost" data-role="action-btn" type="button">✕</button>
+      </div>
+      <div class="queue-summary" data-role="summary" hidden>
+        <div class="queue-summary-line" data-role="summary-line1"></div>
+        <div class="queue-summary-line" data-role="summary-line2"></div>
+      </div>
+      <div class="meter-row" data-role="meter-row" hidden>
+        <div class="meter" data-role="meter"></div>
+        <div class="meter-readout" data-role="meter-readout"></div>
+      </div>
+    </article>
+  </template>
+
   <script src="reencode.js"></script>
 </body>
 </html>

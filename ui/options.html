@@ -6,6 +6,8 @@
     body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.5; background-color: #0b41a6; color: #fff; }
     #suppsites { text-decoration: none; color: white; }
     button { padding: 10px 16px; background-color: #4CAF50; border: none; border-radius: 6px; color: white; font-size: 1em; cursor: pointer; }
+	.refresh { background: none; border: none; cursor: pointer; padding: 0px 5px 5px; }
+	.refresh:hover { background-color: #8133c3; }
     button:hover { background-color: #45a049; }
 	browseBtn:hover { background-color: #fefefe; }
 	button.cooldown { background-color: #999 !important; cursor: progress !important; pointer-events: none; position: relative; }
@@ -41,24 +43,16 @@
   
   <div id="dependency-section" class="settings-section">
     <h2>Dependency Checker and Updater</h2>
-	<p>All of these <strong>must</strong> be installed for the addon to work. You should check on this occasionally, as it can fix issues 
-	with downloads and add more features.
-	<br>The Firefox Addon itself should automatically update, as that's handled by Firefox.</p>
+	<p>All of these <strong>must</strong> be installed for the addon to work.</p>
 	
-	<div class="toggle-container">
-    <label class="switch">
-      <input type="checkbox" id="autoupdatetoggle">
-      <span class="slider"></span>
-    </label>
-    <span class="toggle-label">Enable for automatic dependency updates, checked weekly.<br>It should only be disabled if you want to manually update dependencies yourself.</span>
-  </div><br>
-	
-	<p style="color:#bfbfbf; font-size: 13px; margin: -5px auto;">You can refresh the page to re-check the current versions.</p>
     <table id="dependency-table" class="dependency-table">
       <thead>
         <tr>
           <th>Dependency</th>
-          <th>Current Version</th>
+          <th>
+		    <span style="position: relative; text-align: center;">Current Version</span>
+			<button id="refreshbutton" class="refresh" style="position:absolute; transform: translate(70%, -7px); font-size: 25px;">↻</button>
+		  </th>
           <th>Latest Version</th>
           <th>Action</th>
           <th>Status</th>
@@ -116,46 +110,65 @@
   <a href="https://github.com/dodekatos/YTDownloader/raw/refs/heads/main/native-client-setup.exe" style="text-decoration: none; color: #bfbfbf; font-size: 13px; padding-top: 5px; display:inline-block;">Not working? <u>Click me</u> to download the Native Client installer</a>
   <br><br>
   
-  <div id="toolsdiv" style="border: 5px solid #e3baff; max-width: 360px">
+  <div id="toolsdiv" style="border: 5px solid #e3baff; min-width: 350px; max-width: 360px; display: inline-block; border-radius: 10px;">
     <h2 style="text-align: center; margin: 12px 0;">Built-in Useful Tools</h2>
 	<div style="justify-content: center; display: flex; margin-bottom: 10px;">
       <button id="open-reencode" style="background-color: #aa72e1; margin-right: 6px;">Re-encode Tool</button>
 	  <button id="open-manualdownload" style="background-color: #aa72e1">Manual Download Tool</button>
 	</div>
   </div>
+  <div id="sitesdiv" style="border: 5px solid #e3baff; min-width: 350px; max-width: 360px; display: inline-block; margin-left: 10px; border-radius: 10px;">
+    <h2 style="text-align: center; margin: 12px 0;">Useful Pages</h2>
+	<div style="justify-content: center; display: flex; margin-bottom: 10px;">
+      <button style="margin-right: 6px;"><a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank", id="suppsites">Supported Sites</a></button>
+      <button id="open-updatenews">Open Update Notes</button>
+	</div>
+  </div>
+  <div id="tickdiv" style="border: 5px solid #e3baff; min-width: 350px; max-width: 390px; display: inline-block; margin-left: 10px; vertical-align: center; border-radius: 10px;">
+	<div style="justify-content: center; padding: 8px 10px;">
+	  <div class="toggle-container">
+        <label class="switch" style="min-width: 40px; margin-right: 5px;">
+          <input type="checkbox" id="autoupdatetoggle">
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Automatic dependency updates, checked weekly.
+		<span style="font-size: 11px; color: #c5c5c5;">Default: Enabled</span></span>
+      </div>
+	  <div class="toggle-container" style="margin-top: 10px;">
+        <label class="switch" style="min-width: 40px; margin-right: 5px;">
+          <input type="checkbox" id="updatenewstoggle">
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Show update notes whenever the addon updates.
+		<span style="font-size: 11px; color: #c5c5c5;">Default: Disabled</span></span>
+      </div>
+	</div>
+  </div>
+  
+  <br>
+  <div style="display:none;"><button id="open-firstrun" style="background-color: #ee2e89">Open First Run Page (dev testing)</button></div>
   <br>
   
-  <button><a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank", id="suppsites">List of Supported Sites</a></button>
+  <div style="border: 5px solid #e3baff; max-width: 525px; padding: 15px; display: inline-block; border-radius: 10px;">
+    <h3 style="color: white; margin: 0px 0px 10px;">Current download location: <span id="currentPath">Loading...</span></h2>
+    <label for="downloadPath" style="color: #9aff00">Enter a new download path if you want:</label><br>
+    <input type="text" id="downloadPath" placeholder="Z:\MyFolder\Downloads" style="width: 450px">
+    <p id="dlenstatus" style="display: none; margin-left: 20px; color: #ffc949;">Notice: This download path might be too long for Windows. By default, 
+    Windows is limited to 260 characters for any directories + file name.<br>Consider a shorter base download folder path, as if any downloaded file 
+    names go over this limit, it will fail to download.</p>
+    <br>
+    <button id="browseBtn" style="background-color: #009d9d;">Browse</button><button id="saveBtn" style="margin-left: 5px;">Save</button>
+    <p id="dlocstatus" style="display: inline-block; margin-left: 20px;"></p>
+  </div>
+  
+  <div style="border: 5px solid #e3baff; max-width: 525px; padding: 21px 15px; display: inline-block; border-radius: 10px; vertical-align: center;">
+  <button id="enable-notifications">Enable Notifications in your Windows notifications tray (Optional)</button>
+  <p id="notifications-message" style="display: none; color: orange;"></p>
+  <p>To disable desktop notifications, click on the site permissions button in your toolbar next to the URL, then remove 'Send notifications'</p>
+  </div>
   <br><br>
   
-  <div style="display:none;"><button id="open-firstrun" style="background-color: #ee2e89">Open First Run Page (dev testing)</button>
-  <br><br></div>
-  
-  <button id="open-updatenews">Open Update Notes</button>
-  <br><br>
-  
-  <div class="toggle-container">
-    <label class="switch">
-      <input type="checkbox" id="updatenewstoggle">
-      <span class="slider"></span>
-    </label>
-    <span class="toggle-label">Enable this to be shown update notes whenever the addon updates.<br>I'd recommend it in case if there's 
-	any important changes.</span>
-  </div><br>
-  
-  <h2 style="color: white; margin: 10px 0px;">Current download location: <span id="currentPath">Loading...</span></h2>
-  <!-- <h4 style="color: #79ffff; margin: 8px 0px;">Example file path input: Z:\MyFolder\Downloads</h4> -->
-  <label for="downloadPath" style="color: #9aff00">Enter a new download path if you want:</label><br>
-  <input type="text" id="downloadPath" placeholder="Z:\MyFolder\Downloads" style="width: 600px">
-  <p id="dlenstatus" style="display: none; margin-left: 20px; color: #ffc949;">Notice: This download path might be too long for Windows. By default, 
-  Windows is limited to 260 characters for any directories + file name.<br>Consider a shorter base download folder path, as if any downloaded file 
-  names go over this limit, it will fail to download.</p>
-  <br>
-  <button id="browseBtn" style="background-color: #009d9d;">Browse</button><button id="saveBtn" style="margin-left: 5px;">Save</button>
-  <p id="dlocstatus" style="display: inline-block; margin-left: 20px;"></p>
-  <br><br>
-  
-  <div style="border: 5px solid #e3baff; max-width: 990px">
+  <div style="border: 5px solid #e3baff; max-width: 990px; border-radius: 10px;">
     <h3 style="margin-bottom: 15px; text-align: center;">Having issues with Windows Defender flagging the Native Client or abruptly stopping FFmpeg re-encodes?</h3>
     <p style="margin-bottom: 0; padding: 0 18px;">Open your Antivirus (or click the button below), and navigate through:<br>
 	<strong>Add an exclusion</strong> >> <strong>Folder</strong> >> <strong>C:\ProgramData\YTDownloader\bin</strong><br>
@@ -164,13 +177,6 @@
 	This is normal Windows behaviour, because you're opening the Windows Defender Exclusions page. For the sake of transparency, the 
 	addon <strong>will not add the exception automatically.</strong> You can add the exception yourself.</p>
     <br>
-  </div>
-  
-  <br>
-  <button id="enable-notifications">Enable Notifications in your system tray (Optional)</button>
-  <p id="notifications-message" style="display: none; color: orange;"></p>
-  <p><i>To disable desktop notifications, just click on the site permissions button in your toolbar next to the URL, then remove 'Send notifications'</i></p>
-  <br>
   </div>
   <script src="options.js"></script>
 </body>

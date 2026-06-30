@@ -94,6 +94,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const genericOptions = document.getElementById("genericOptions");
   const toggleBtnz = document.getElementById("toggleMoreBtnz");
   const dateCheckbox = document.getElementById("dateCheckbox");
+  const numberingCheckbox = document.getElementById("numberingCheckbox");
   const cropCheckbox = document.getElementById("cropCheckbox");
   const cropInputSpan = document.getElementById("cropInputSpan");
   const cropStart = document.getElementById("cropStart");
@@ -145,6 +146,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const oldSpinner = estimateBtn.querySelector(".spinnerlight");
     if (oldSpinner) estimateBtn.removeChild(oldSpinner);
   }
+  function removeCooldown3() {
+    cooldown3 = false;
+    yesBtn.classList.remove("cooldown");
+    const oldSpinner = yesBtn.querySelector(".spinnerstop");
+    if (oldSpinner) yesBtn.removeChild(oldSpinner);
+  }
   
   function fixIfYtUrl(url) {
     // Check if it's a YouTube URL
@@ -175,6 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   let cooldown2 = false;
+  let cooldown3 = false;
   
   // Default all options to Hidden
   youtubeOptions.style.display = "none";
@@ -208,6 +216,71 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   cropEnd.addEventListener('input', () => {
 	console.log("[TempInfo] cropEnd is: " + cropEnd.value);
+  });
+  
+  // Stop all current downloads button
+  // It tells the native client to taskkill all yt-dlp.exe processes, which *should* (TEST THIS) then end the native client in charge of it too
+  const stopButton = document.getElementById('stop-button');
+  const dropdownBox = document.getElementById('confirmDropdown');
+  const yesBtn = document.getElementById('yes-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const statusMessage = document.getElementById('statusMessage');
+  
+  stopButton.addEventListener('click', () => {
+    dropdownBox.style.display = (dropdownBox.style.display === 'none' || dropdownBox.style.display === '') ? 'block' : 'none';
+  });
+  
+  cancelBtn.addEventListener('click', () => {
+    dropdownBox.style.display = 'none';
+	statusMessage.style.display = 'none';
+  });
+  
+  yesBtn.addEventListener('click', async () => {
+	// Button cooldown
+	if (cooldown3) return;
+	cooldown3 = true;
+	yesBtn.classList.add("cooldown");
+	const spinner = document.createElement("span");
+	spinner.classList.add("spinnerstop");
+	yesBtn.appendChild(spinner);
+	
+	statusMessage.style.display = 'block';
+    statusMessage.textContent = "Attempting to stop download(s)...";
+  
+    try {
+	  browser.runtime.sendNativeMessage("ytdlp_host", {
+		action: "stopAllDownloads"
+	  }).then (response => {
+		console.log("[TempInfo] stop downloads reply: " + response)
+		if (response.status === "success") {
+		  statusMessage.textContent = "Successfully stopped all downloads";
+		  removeCooldown3();
+		} else if (response.status === "nonerunning") {
+		  statusMessage.textContent = "No downloads are currently running";
+		  removeCooldown3();
+		} else if (response.status === "noperms") {
+		  statusMessage.textContent = "Failed to stop YT-DLP, insufficient permissions";
+		  removeCooldown3();
+		} else {
+		  statusMessage.textContent = "Failed to stop downloads: " + response.message;
+		  removeCooldown3();
+		};
+	  });
+    } catch (error) {
+      statusMessage.textContent = "Error: " + error;
+	  removeCooldown3();
+    }
+  });
+	
+  // Close dropdown when clicking outside of it
+  document.addEventListener('click', function(event) {
+    const isClickInsideDropdown = dropdownBox.contains(event.target);
+    const isClickOnStopButton = stopButton.contains(event.target);
+    
+    if (!isClickInsideDropdown && !isClickOnStopButton) {
+    dropdownBox.style.display = 'none';
+	statusMessage.style.display = 'none';
+    }
   });
   
   // Get current tab
@@ -339,6 +412,8 @@ document.addEventListener("DOMContentLoaded", () => {
 	  // Get URL
 	  getCurrentUrl().then(currentUrl => {
 		const url = fixIfYtUrl(currentUrl);
+		const numberingchecked = numberingCheckbox.checked;
+		console.log("[TempPopupInfo] numberingchecked is: " + numberingchecked)
 		const datechecked = dateCheckbox.checked;
 		console.log("[TempPopupInfo] datechecked is: " + datechecked)
 		const cropchecked = cropCheckbox.checked;
@@ -358,7 +433,8 @@ document.addEventListener("DOMContentLoaded", () => {
 		  pagetype: pageType,
 		  cropchecked,
 		  cropstart: cropStart.value,
-		  cropend: cropEnd.value
+		  cropend: cropEnd.value,
+		  numberingchecked
 		}).then(response => {
 		  if (response.status === "success") {
 			status.textContent = "✔ Download complete!";

@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const notificationsMessage = document.getElementById("notifications-message");
   const browsebtn = document.getElementById("browseBtn");
   const manifestVersion = document.getElementById("manifestVersion");
+  const refreshbutton = document.getElementById("refreshbutton");
 
   status.textContent = "";
   
@@ -47,6 +48,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 	localStorage.setItem("updateOptedIn", updatenewstoggle.checked ? "true" : "false");
 	console.log("Subscription status: " + localStorage.getItem("updateOptedIn"))
   }); */
+  
+  refreshbutton.addEventListener('click', function() {window.location.reload()} );  
   
   browser.storage.local.get("updateOptedIn").then((result) => {
     const doisendupdatenews = result.updateOptedIn;
