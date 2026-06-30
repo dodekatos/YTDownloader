@@ -42,6 +42,8 @@ import logging
 from logging import FileHandler, getLogger, StreamHandler
 from logging.handlers import TimedRotatingFileHandler
 import traceback
+import uuid
+import queue as pyqueue
 
 # Constant file locations
 PROGRAM_DATA = r"C:\ProgramData\YTDownloader"
@@ -57,8 +59,6 @@ FFPROBE_PATH = r"C:\ProgramData\YTDownloader\bin\ffmpeg\bin\ffprobe.exe"
 LOG_PATH = r"C:\ProgramData\YTDownloader\log.txt"
 CONFIG_PATH = os.path.join(os.environ["PROGRAMDATA"], "YTDownloader", "native_host", "config.json")
 # idk why i did config_path different, but it is what it is
-# global current_encoder
-# current_encoder = None
 
 def custom_namer(name):
     return name.replace(".txt", "") + ".txt"
@@ -228,11 +228,14 @@ def load_config():
 CFG_PATH, DOWNLOAD_DIR, recovery_notice = load_config()
 
 # This is used to send a response to whatever is communicating with us
+send_response_lock = threading.Lock()
+
 def send_response(message):
     response = json.dumps(message).encode("utf-8")
-    sys.stdout.buffer.write(struct.pack("I", len(response)))
-    sys.stdout.buffer.write(response)
-    sys.stdout.flush()
+    with send_response_lock:
+        sys.stdout.buffer.write(struct.pack("I", len(response)))
+        sys.stdout.buffer.write(response)
+        sys.stdout.flush()
 
 # This is used to read the message sent by whatever is communicating with us
 def read_message():
@@ -264,7 +267,7 @@ def check_dependencies():
     return missing
 
 # This is where all the download logic and downloading happens.
-def run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart, cropend):
+def run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart, cropend, numberingchecked):
     reencode_notice = ""
     missing = check_dependencies()
     if missing:
@@ -272,9 +275,10 @@ def run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart,
         return {"status": "error", "message": f"Missing: {', '.join(missing)}"}
     
     channelfolder = "%(uploader)s/" if pagetype == "channel" else ""
-    playlistfolder = "%(playlist)s/%(playlist_index)s - " if pagetype in ("playlist", "channelplaylists") else ""
+    playlistfolder = "%(playlist)s/" if pagetype in ("playlist", "channelplaylists") else ""
+    ifindex = "%(playlist_index)s - " if numberingchecked == "true" else ""
     date_format = "[%(upload_date>%Y-%m-%d)s] " if datechecked else ""
-    output_location = os.path.join(DOWNLOAD_DIR, f"{channelfolder}{playlistfolder}{date_format}%(title).100B.%(ext)s")
+    output_location = os.path.join(DOWNLOAD_DIR, f"{channelfolder}{playlistfolder}{ifindex}{date_format}%(title).100B.%(ext)s")
     base_args = [
         YTDLP_PATH,
         url,
@@ -374,15 +378,18 @@ def run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart,
     # This is where it runs the download command!
     log(f"[Info] Running command: {args}")
     try:
-        result = subprocess.run(args, capture_output=True, text=True, check=True, timeout=43200)
+        result = subprocess.run(args, capture_output=True, text=True, check=False, timeout=43200) # check was True
         if result.returncode != 0:
-            log(f"[Massive Error] Error somewhere in the whole run_download def: {result.stderr}")
+            log(f"[Massive Error] Error with downloading: {result.stderr}")
             return {"status": "error", "message": result.stderr}
         log(f"[Success] Download successful!")
         return {"status": "success", "message": "Download complete.", "reencode_notice": reencode_notice}
+    except subprocess.CalledProcessError as e:
+        log(f"[Massive Error] Called Process Error: {e}")
+        return {"status": "error", "success": False, "message": str(e.output)}
     except Exception as e:
-            log(f"[Massive Error] Exceptional error with the download command: {str(e)}")
-            return {"status": "error", "success": False, "message": str(e)}
+        log(f"[Massive Error] Exceptional error with the download command: {str(e)}")
+        return {"status": "error", "success": False, "message": str(e)}
     except subprocess.TimeoutExpired:
         log(f"[Massive Error] Timeout expired on the download command")
         return {"status": "error", "success": False, "message": "Download command cancelled due to 12 hour timeout"}
@@ -494,14 +501,14 @@ def get_file_sizes(url):
         # --- Define all the smart formats ---
         smart_formats = {
             "best": lambda f: f.get("ext") == "mp4",
-            "2160p": lambda f: f.get("height") == 2160 and f.get("ext") == "mp4",
-            "1440p": lambda f: f.get("height") == 1440 and f.get("ext") == "mp4",
-            "1080p": lambda f: f.get("height") == 1080 and f.get("ext") == "mp4",
-            "720p": lambda f: f.get("height") == 720 and f.get("ext") == "mp4",
-            "480p": lambda f: f.get("height") == 480 and f.get("ext") == "mp4",
-            "360p": lambda f: f.get("height") == 360 and f.get("ext") == "mp4",
-            "240p": lambda f: f.get("height") == 240 and f.get("ext") == "mp4",
-            "144p": lambda f: f.get("height") == 144 and f.get("ext") == "mp4",
+            "2160p": lambda f: 1441 < f.get("height") <= 2160 and f.get("ext") == "mp4",
+            "1440p": lambda f: 1081 < f.get("height") <= 1440 and f.get("ext") == "mp4",
+            "1080p": lambda f: 721 < f.get("height") <= 1080 and f.get("ext") == "mp4",
+            "720p": lambda f: 481 < f.get("height") <= 720 and f.get("ext") == "mp4",
+            "480p": lambda f: 361 < f.get("height") <= 480 and f.get("ext") == "mp4",
+            "360p": lambda f: 241 < f.get("height") <= 360 and f.get("ext") == "mp4",
+            "240p": lambda f: 145 < f.get("height") <= 240 and f.get("ext") == "mp4",
+            "144p": lambda f: f.get("height") <= 144 and f.get("ext") == "mp4",
             #"bestGENERIC": lambda f: True,
             #"1080pGENERIC": lambda f: f.get("height") == 1080,
             #"720pGENERIC": lambda f: f.get("height") == 720,
@@ -768,33 +775,111 @@ def update_ffmpeg():
         return {"status": "error", "success": False, "error": str(e)}
 
 # ------ New whole Re-encode Tool bit ------
+# Anything ffmpeg can decode and that makes sense to feed back out as one of our supported
+# output containers/codecs. Excludes genuinely obscure/legacy formats (RealMedia, raw DSD, etc.)
+# where decoder support is inconsistent or re-encoding them is rarely useful in practice.
 SUPPORTED_INPUT_EXTS = {
-    ".mp4", ".mkv", ".webm", ".mov", ".avi", ".flv", ".ts", ".m4a",
-    ".mp3", ".wav", ".flac", ".ogg", ".opus", ".aac", ".wma"
+    # Common video containers
+    ".mp4", ".m4v", ".mkv", ".webm", ".mov", ".avi", ".flv", ".f4v", ".wmv", ".asf",
+    ".mpg", ".mpeg", ".ts", ".m2ts", ".mts", ".vob", ".ogv", ".3gp", ".3g2", ".mxf",
+    # Common audio containers/streams
+    ".m4a", ".m4b", ".mp3", ".wav", ".flac", ".ogg", ".opus", ".aac", ".wma",
+    ".mka", ".aiff", ".aif", ".ac3", ".dts", ".amr", ".ape", ".tta"
 }
 
-# Opens a File Explorer window for the user to choose a file to re-encode
-def pick_file_dialog():
+# Opens a File Explorer window for the user to choose one or more files to re-encode
+def pick_files_dialog():
     try:
         root = tk.Tk()
         root.withdraw()
+        # Without this, the dialog can open behind other windows on Windows and look like
+        # nothing happened. Forcing the hidden root topmost brings the dialog along with it.
+        root.attributes("-topmost", True)
+        root.lift()
+        root.focus_force()
         # Build filter string like: "Supported files (*.mp4;*.mkv;... )|*.mp4;*.mkv;..."
-        patterns = ";" .join(f"*{ext}" for ext in sorted(SUPPORTED_INPUT_EXTS))
+        patterns = ";".join(f"*{ext}" for ext in sorted(SUPPORTED_INPUT_EXTS))
         filetypes = [("Supported media", patterns), ("All files", "*.*")]
-        path = filedialog.askopenfilename(title="Choose a media file", filetypes=filetypes)
-        log(f"[Info] File chosen to convert: {path}")
+        paths = filedialog.askopenfilenames(title="Choose media files", filetypes=filetypes, parent=root)
+        log(f"[Info] Files chosen to convert: {paths}")
         root.update_idletasks()
         root.destroy()
-        return path or None
+        return list(paths) if paths else []
     except Exception as e:
-        log(f"[Error] Failed to pick file dialog: {e}")
+        log(f"[Error] Failed to pick files dialog: {e}")
+        return []
+
+# Opens a Folder picker, then collects every supported media file found directly inside it
+def pick_folder_dialog():
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        root.lift()
+        root.focus_force()
+        folder = filedialog.askdirectory(title="Choose a folder of media files", parent=root)
+        root.update_idletasks()
+        root.destroy()
+        if not folder:
+            return []
+        found = []
+        for entry in sorted(os.listdir(folder)):
+            full_path = os.path.join(folder, entry)
+            if os.path.isfile(full_path) and os.path.splitext(entry)[1].lower() in SUPPORTED_INPUT_EXTS:
+                found.append(full_path)
+        log(f"[Info] Folder chosen to convert: {folder} -- Found {len(found)} supported file(s)")
+        return found
+    except Exception as e:
+        log(f"[Error] Failed to pick folder dialog: {e}")
+        return []
+
+
+# --- Small formatting helpers used to make probe results display-ready for the UI ---
+
+# Converts a duration in seconds (float/str) into "HH:MM:SS"
+def seconds_to_hms(seconds):
+    try:
+        total = int(float(seconds))
+    except (TypeError, ValueError):
+        return None
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+# Converts a byte count into a human-readable string, e.g. "245.3 MB"
+def human_filesize(num_bytes):
+    try:
+        num_bytes = float(num_bytes)
+    except (TypeError, ValueError):
+        return None
+    if num_bytes < 1024:
+        return f"{num_bytes:.0f} B"
+    for unit in ("KB", "MB", "GB", "TB"):
+        num_bytes /= 1024
+        if num_bytes < 1024:
+            return f"{num_bytes:.1f} {unit}"
+    return f"{num_bytes:.1f} PB"
+
+# ffprobe reports frame rate as a fraction string like "30000/1001" - turn that into a clean float
+def parse_fps_fraction(fps_str):
+    if not fps_str:
+        return None
+    try:
+        if "/" in fps_str:
+            numerator, denominator = fps_str.split("/", 1)
+            denominator = float(denominator)
+            if denominator == 0:
+                return None
+            return round(float(numerator) / denominator, 2)
+        return round(float(fps_str), 2)
+    except (TypeError, ValueError):
         return None
 
 # Checks the user submitted file against criteria, and for its codecs and such
 def probe_file(path):
     try:
         if not os.path.isfile(path):
-            return {"success": False, "error": "File not found."}
+            return {"success": False, "error": "File not found.", "path": path, "filename": os.path.basename(path)}
         cmd = [
             FFPROBE_PATH, "-v", "quiet",
             "-print_format", "json",
@@ -806,50 +891,62 @@ def probe_file(path):
         proc_utf8 = proc.stdout.decode("utf-8", errors="replace")
         
         if proc.returncode != 0:
-            return {"success": False, "error": proc.stderr.strip() or "ffprobe error"}
+            err = proc.stderr.decode("utf-8", errors="replace").strip() or "ffprobe error"
+            return {"success": False, "error": err, "path": path, "filename": os.path.basename(path)}
         
         if proc_utf8.strip():
             info = json.loads(proc_utf8)
         else:
             log("[Error] ffprobe output bad i guess?")
+            return {"success": False, "error": "ffprobe returned no usable output for this file.", "path": path, "filename": os.path.basename(path)}
+        
         # Summarize
-        has_video = any(s.get("codec_type") == "video" for s in info.get("streams", []))
-        has_audio = any(s.get("codec_type") == "audio" for s in info.get("streams", []))
-        vcodec = next((s.get("codec_name") for s in info.get("streams", []) if s.get("codec_type") == "video"), None)
-        acodec = next((s.get("codec_name") for s in info.get("streams", []) if s.get("codec_type") == "audio"), None)
-        container = (info.get("format", {}) or {}).get("format_name")
+        streams = info.get("streams") or []
+        has_video = any(s.get("codec_type") == "video" for s in streams)
+        has_audio = any(s.get("codec_type") == "audio" for s in streams)
+        vcodec = next((s.get("codec_name") for s in streams if s.get("codec_type") == "video"), None)
+        acodec = next((s.get("codec_name") for s in streams if s.get("codec_type") == "audio"), None)
+        container_raw = (info.get("format", {}) or {}).get("format_name")
+        container = (container_raw or "").split(",")[0] if container_raw else None
         duration = (info.get("format", {}) or {}).get("duration")
-        streams = info.get("streams") or {}
-        video_height = next((s.get("height") for s in info.get("streams", []) if s.get("codec_type") == "video"), None)
-        video_width = next((s.get("width") for s in info.get("streams", []) if s.get("codec_type") == "video"), None)
-        video_fps = next((s.get("avg_frame_rate") for s in info.get("streams", []) if s.get("codec_type") == "video"), None)
-        vbitrate = (info.get("format", {}) or {}).get("bit_rate")
+        video_height = next((s.get("height") for s in streams if s.get("codec_type") == "video"), None)
+        video_width = next((s.get("width") for s in streams if s.get("codec_type") == "video"), None)
+        video_fps_raw = next((s.get("avg_frame_rate") for s in streams if s.get("codec_type") == "video"), None)
+        video_fps = parse_fps_fraction(video_fps_raw)
+        format_bitrate = (info.get("format", {}) or {}).get("bit_rate")
         file_size = (info.get("format", {}) or {}).get("size")
         
-        # Get the input audio's bitrate and apply sanity bounds if needed
-        audio_stream = next((s for s in info["streams"] if s["codec_type"] == "audio"), None)
-        if audio_stream and "bit_rate" in audio_stream:
-            try:
-                input_bitrate_kbps = int(audio_stream["bit_rate"]) // 1000
-                log(f"[TempInfo] Reencode input audio bitrate is: {input_bitrate_kbps}")
-            except ValueError:
-                log("[Error] Reencode input audio bitrate could not be found")
-                input_bitrate_kbps = None
-        else:
-            log("[Error] Reencode input audio bitrate could not be found")
-            input_bitrate_kbps = None
+        # Video bitrate: prefer the video stream's own bit_rate if ffprobe reported one,
+        # otherwise fall back to the overall container bitrate (close enough for display/audio-only files this'll just be None)
+        video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+        video_bitrate_raw = (video_stream or {}).get("bit_rate") or (format_bitrate if has_video and not has_audio else None)
+        try:
+            video_bitrate_kbps = int(video_bitrate_raw) // 1000 if video_bitrate_raw else None
+        except (TypeError, ValueError):
+            video_bitrate_kbps = None
         
-        if not input_bitrate_kbps or input_bitrate_kbps <= 0:
+        # Get the input audio's bitrate and apply sanity bounds for the OUTPUT target bitrate if needed
+        audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+        if audio_stream and audio_stream.get("bit_rate"):
+            try:
+                input_audio_bitrate_kbps = int(audio_stream["bit_rate"]) // 1000
+            except (TypeError, ValueError):
+                input_audio_bitrate_kbps = None
+        else:
+            input_audio_bitrate_kbps = None
+        
+        if not input_audio_bitrate_kbps or input_audio_bitrate_kbps <= 0:
             final_bitrate_kbps = 192
         else:
-            final_bitrate_kbps = max(128, min(input_bitrate_kbps, 320))
-        log(f"[TempInfo] Thus the final re-encode audio bitrate is: {final_bitrate_kbps}")
+            final_bitrate_kbps = max(128, min(input_audio_bitrate_kbps, 320))
+        log(f"[Info] Probed '{os.path.basename(path)}' -- input audio bitrate: {input_audio_bitrate_kbps} kbps, target output bitrate: {final_bitrate_kbps} kbps")
         
         # Yup that's all done, return the values
         log(f"[Info] Successfully probed file")
         return {
             "success": True,
             "path": path,
+            "filename": os.path.basename(path),
             "container": container,
             "video_height": video_height,
             "video_width": video_width,
@@ -858,21 +955,89 @@ def probe_file(path):
             "has_audio": has_audio,
             "video_codec": vcodec,
             "audio_codec": acodec,
+            "video_bitrate_kbps": video_bitrate_kbps,
+            "audio_bitrate_kbps": input_audio_bitrate_kbps,
             "duration": duration,
+            "duration_display": seconds_to_hms(duration),
             "final_bitrate_kbps": final_bitrate_kbps,
             "streams": streams,
             "cpu_threads": limited_threads(),
-            "vbitrate_kbps": vbitrate,
             "file_size": file_size,
+            "file_size_display": human_filesize(file_size),
             "output_location": DOWNLOAD_DIR
         }
     except Exception as e:
         log(f"[Error] Failed to probe file: {e}")
-        return {"success": False, "error": str(e)}
+        log(traceback.format_exc())
+        return {"success": False, "error": str(e), "path": path, "filename": os.path.basename(path) if path else None}
 
 # The command used to re-encode the user's chosen file
-def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbps, attach_metadata, attach_chapters, fps,
-        use_gpu, gpu_type, crf_word, v_width, v_height, v_fps):
+# --- Hardware acceleration registry -------------------------------------------------------
+# Maps an accelerator name to the ffmpeg encoder, preset flags, and quality table (low/default/high)
+# for each video codec it supports. To add support for a new accelerator later (Intel Quick Sync,
+# AMD AMF, etc.), register a new top-level key here using the same shape - nothing else in
+# build_ffmpeg_cmd needs to change.
+ENCODER_REGISTRY = {
+    "cpu": {
+        "quality_flag": "-crf",
+        "codecs": {
+            "libx264":   {"encoder": "libx264",    "preset_args": ["-preset", "medium"], "quality": {"low": 28, "default": 24, "high": 20}},
+            "libx265":   {"encoder": "libx265",    "preset_args": ["-preset", "medium"], "quality": {"low": 26, "default": 22, "high": 18}},
+            "libsvtav1": {"encoder": "libsvtav1",  "preset_args": ["-preset", "6"],      "quality": {"low": 36, "default": 32, "high": 28}},
+        }
+    },
+    "nvidia": {
+        "quality_flag": "-cq",
+        "codecs": {
+            "libx264":   {"encoder": "h264_nvenc", "preset_args": ["-preset", "p4"],                "quality": {"low": 38, "default": 32, "high": 26}},
+            "libx265":   {"encoder": "hevc_nvenc", "preset_args": ["-preset", "p4", "-tune", "hq"],  "quality": {"low": 40, "default": 34, "high": 28}},
+            "libsvtav1": {"encoder": "av1_nvenc",  "preset_args": ["-preset", "p4"],                 "quality": {"low": 48, "default": 44, "high": 36}},
+        }
+    },
+    # Future accelerators can be registered here, e.g.:
+    # "intel": {"quality_flag": "-global_quality", "codecs": {"libx264": {...}, "libx265": {...}, "libsvtav1": {...}}},
+}
+
+# Accepts either a real bool or a JSON/string "true"/"false" and returns a real bool
+def _truthy(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return bool(value)
+
+# Sanity-bounds a target width/height and rounds it down to an even number, since most codecs'
+# chroma subsampling (yuv420p etc.) requires even dimensions and will otherwise hard-fail.
+def _sane_dim(value, lo=16, hi=7680):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    if n < lo or n > hi:
+        return None
+    return n - (n % 2)
+
+# Bounds a requested output FPS to 1-999, and caps it to the source's FPS if known -
+# there's no point asking ffmpeg to invent frames the source never had.
+def _clamp_fps(target_fps, source_fps):
+    try:
+        target = int(target_fps)
+    except (TypeError, ValueError):
+        return None
+    if target < 1 or target > 999:
+        return None
+    try:
+        source = float(source_fps) if source_fps else None
+    except (TypeError, ValueError):
+        source = None
+    if source and source > 0:
+        target = min(target, max(1, round(source)))
+    return target
+
+# The command used to re-encode the user's chosen file
+def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbps, attach_metadata, attach_chapters,
+        use_gpu, gpu_type, crf_word, cropchecked, crop_start, crop_end,
+        target_width=None, target_height=None, target_fps=None, source_fps=None, use_gpu_decode=False):
     """
     v_choice: one of ["copy","libx265","libx264","libsvtav1","none","amv_v"]
     a_choice: one of ["copy","aac","libmp3lame","none","amv_a"]
@@ -885,19 +1050,17 @@ def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbp
     attached_idx = None
     attached_codec = None
     disp = None
+    video_indices = []
     
     if not is_amv:
         info = probe_file(input_path)
         streams = info.get("streams", [])
-        log(f"[TempInfo] streams is {streams}")
         
-        # Find video streams and the attached_pic (if present)
+        # Find video streams and the attached_pic (cover art) if present
         try:
-            video_indices = [i for i,s in enumerate(streams) if s.get("codec_type") == "video"]
+            video_indices = [i for i, s in enumerate(streams) if s.get("codec_type") == "video"]
         except Exception as e:
             log(f"[Error] video_indices failed: {e}")
-        
-        log(f"[TempInfo] The streams with video in them (video_indices) are: {video_indices}")
         
         for i in video_indices:
             disp = (streams[i].get("disposition") or {})
@@ -905,154 +1068,92 @@ def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbp
                 attached_idx = i
                 attached_codec = streams[i].get("codec_name")
                 break
-            else:
-                log("[ErrorInfo] There was no attached_pic, so the input file probably didn't have a thumbnail, and it was just generated by the OS.")
-                #break
         
-        log(f"[TempInfo] attached_idx is: {attached_idx}")
-        log(f"[TempInfo] attached_codec is: {attached_codec}")
-        log(f"[TempInfo] disp is: {disp}")
+        log(f"[Info] Cover-art stream detection -- attached_idx: {attached_idx}, attached_codec: {attached_codec}")
     
-    cmd = [FFMPEG_PATH, "-hide_banner", "-y", "-i", f"{input_path}"]
+    accel = "nvidia" if (_truthy(use_gpu) and gpu_type == "nvidia") else "cpu"
     
-        # --- GPU quality table ---
-    nvidia_h265 = {"low": 36, "default": 30, "high": 24}
-    nvidia_h264 = {"low": 34, "default": 28, "high": 22}
-    nvidia_av1 = {"low": 44, "default": 36, "high": 30}
+    cmd = [FFMPEG_PATH, "-hide_banner", "-y"]
+    if accel == "nvidia" and _truthy(use_gpu_decode) and v_choice not in ("none", "copy", "amv_v"):
+        # Opt-in only: NVENC alone only accelerates the encode step, so decode and any
+        # resolution/FPS filtering still run on the CPU and can become the bottleneck
+        # (especially when both are used together). Decoding via NVDEC offloads that too -
+        # but not every GPU generation/driver can decode every source codec, so this isn't
+        # forced on by default; if a particular file fails with this enabled, try unchecking it.
+        cmd += ["-hwaccel", "cuda"]
+    cmd += ["-i", f"{input_path}"]
     
-    intel_h265 = {"low": 32, "default": 26, "high": 20}
-    intel_h264 = {"low": 28, "default": 23, "high": 18}
-    intel_av1 = {"low": 34, "default": 28, "high": 22}
+    # Clipping/cropping applies regardless of codec choice (including stream copy and audio-only output)
+    if cropchecked and crop_start and crop_end:
+        log(f"[Info] Cropping between {crop_start} and {crop_end}")
+        cmd += ["-ss", crop_start, "-to", crop_end]
     
-    cpu_h265 = {"low": 26, "default": 22, "high": 18} # Used to be 28 / 24 / 20
-    cpu_h264 = {"low": 28, "default": 24, "high": 20}
-    cpu_av1 = {"low": 36, "default": 32, "high": 28} # Used to be 38 / 34 / 30
+    # --- Explicit stream selection ---
+    # Deliberately not using a blanket "-map 0" here: some files carry extra "data" or
+    # "attachment" streams (e.g. timed-text/caption tracks that ffprobe can't classify as a
+    # proper subtitle stream) that several containers - Matroska included - flatly refuse to
+    # write, which used to crash the whole encode with "Only audio, video, and subtitles are
+    # supported for Matroska." Mapping only the stream types we actually want sidesteps that
+    # entirely, for every output container, not just MKV.
+    mapped_video_indices = []
+    if not is_amv and v_choice != "amv_v":
+        if v_choice != "none":
+            for i, s in enumerate(streams):
+                if s.get("codec_type") == "video" and i != attached_idx:
+                    cmd += ["-map", f"0:{i}"]
+                    mapped_video_indices.append(i)
+            if attached_idx is not None and not is_mkv:
+                # MP4/MOV/etc: keep the cover art riding along as an attached_pic video stream.
+                # For MKV we just drop it from the main mapping instead (see comment below).
+                cmd += ["-map", f"0:{attached_idx}"]
+                mapped_video_indices.append(attached_idx)
+            if is_mkv:
+                # MKV supports copying virtually any subtitle codec untouched. Other containers
+                # (MP4 in particular) are far pickier about subtitle codecs, so we leave
+                # subtitles out of those rather than risk the same kind of mux failure.
+                for i, s in enumerate(streams):
+                    if s.get("codec_type") == "subtitle":
+                        cmd += ["-map", f"0:{i}", "-c:s", "copy"]
+        if a_choice != "none":
+            for i, s in enumerate(streams):
+                if s.get("codec_type") == "audio":
+                    cmd += ["-map", f"0:{i}"]
     
     # --- Video handling ---
     if v_choice == "none":
         cmd += ["-vn"]
-    
     else:
-        # All outputs include video unless "none"
-        if v_choice != "amv_v":
-            cmd += ["-map", "0"]
-        
-        # ---------------------------------------------------------------
-        # GPU ENCODING PATH
-        # ---------------------------------------------------------------
-        if use_gpu == "True" and v_choice in ("libx265", "libx264", "libsvtav1"):
-            # ------------------ NVIDIA ------------------
-            if gpu_type == "nvidia":
-                if v_choice == "libx265":
-                    cmd += ["-c:v", "hevc_nvenc", "-preset", "p4", "-tune", "hq", "-cq", str(nvidia_h265[crf_word])]
-                elif v_choice == "libx264":
-                    cmd += ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", str(nvidia_h264[crf_word])]
-                elif v_choice == "libsvtav1":
-                    cmd += ["-c:v", "av1_nvenc", "-preset", "p4", "-cq", str(nvidia_av1[crf_word])]
+        if v_choice == "copy":
+            cmd += ["-c:v", "copy"]
+        elif v_choice == "amv_v":
+            cmd += ["-c:v", "amv", "-s", "128x128", "-ac", "1", "-vstrict", "-1", "-r", "15", "-map", "0:v:0", "-block_size", "1470", "-pix_fmt", "yuvj420p"]
+        elif v_choice in ENCODER_REGISTRY[accel]["codecs"]:
+            spec = ENCODER_REGISTRY[accel]["codecs"][v_choice]
+            quality_value = spec["quality"].get(crf_word, spec["quality"]["default"])
+            cmd += ["-c:v", spec["encoder"]] + spec["preset_args"] + [ENCODER_REGISTRY[accel]["quality_flag"], str(quality_value)]
             
-            # ------------------ INTEL ------------------
-            elif gpu_type == "intel":
-                if v_choice == "libx265":
-                    cmd += ["-c:v", "hevc_qsv", "-global_quality", str(intel_h265[crf_word])]
-                elif v_choice == "libx264":
-                    cmd += ["-c:v", "h264_qsv", "-look_ahead", "1", "-global_quality", str(nvidia_h264[crf_word])]
-                elif v_choice == "libsvtav1":
-                    cmd += ["-c:v", "av1_qsv", "-global_quality", str(intel_av1[crf_word])]
+            # Resolution/FPS changes only make sense while actually re-encoding (never with
+            # stream copy, hence this living inside the encoder-codec branch). Both are scoped
+            # to v:0 specifically - the main video stream is always mapped first - so they never
+            # collide with the attached cover-art stream, which must stay a plain, unfiltered copy.
+            w = _sane_dim(target_width)
+            h = _sane_dim(target_height)
+            if w and h:
+                cmd += ["-filter:v:0", f"scale={w}:{h}"]
             
-            # ------------------ AMD ------------------
-            elif gpu_type == "amd":
-                if v_choice == "libx265":
-                    cmd += ["-c:v", "hevc_amf"]
-                elif v_choice == "libx264":
-                    cmd += ["-c:v", "h264_amf"]
-                elif v_choice == "libsvtav1":
-                    cmd += ["-c:v", "av1_amf"]
-            
-            else:
-                log("[Weird Error] Somehow use_gpu was True, the video codec was h265/av1, yet gpu_type was not a valid GPU type.")
-                
-        # ------------------ CPU ------------------
+            fps_val = _clamp_fps(target_fps, source_fps) if target_fps else None
+            if fps_val:
+                cmd += ["-r:v:0", str(fps_val)]
         else:
-            if v_choice == "copy":
-                cmd += ["-c:v", "copy"]
-            elif v_choice == "libx265":
-                cmd += ["-c:v", "libx265", "-preset", "medium", "-crf", str(cpu_h265[crf_word])]
-            elif v_choice == "libx264":
-                cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", str(cpu_h264[crf_word])]
-            elif v_choice == "libsvtav1":
-                cmd += ["-c:v", "libsvtav1", "-preset", "6", "-crf", str(cpu_av1[crf_word])]
-            elif v_choice == "amv_v":
-                cmd += ["-c:v", "amv", "-s", "128x128", "-ac", "1", "-vstrict", "-1", "-r", "15", "-map", "0:v:0", "-block_size", "1470", "-pix_fmt", "yuvj420p"]
-            else:
-                # fallback copy
-                cmd += ["-c:v", "copy"]
+            # Unknown video codec choice - fall back to stream copy rather than failing the whole job
+            log(f"[Error] Unrecognized video codec choice '{v_choice}', falling back to stream copy.")
+            cmd += ["-c:v", "copy"]
     
-    # # Applies CRF and FPS if the user requested of it
-    # if crf:
-        # cmd += ["-crf", str(crf)]
-    # elif not crf:
-        # # Fallback to default values
-        # if v_choice == "libx265":
-            # cmd += ["-crf", "24"]
-        # if v_choice == "libsvtav1":
-            # cmd += ["-crf", "34"]
-    
-    if fps:
-        cmd += ["-r", str(fps)]
-    
-    # I have no idea what this part means nor does
-    # If the input file has a cover/thumbnail:
-    if attached_idx is not None:
-        if is_mkv:
-            log("[TempInfo] It's an MKV")
-            # Remove the cover/thumbnail from output and re-attach as MKV attachment
-            cmd += ["-map", f"-0:{attached_idx}"]
-        else:
-            log("[TempInfo] It's an MP4 (or other)")
-            # MP4/MOV/… path: keep it as an attached_pic video stream
-            # We’ll set per-stream codecs for video:
-            # v:0 -> main video encode, v:attached -> copy
-            # We don’t know “v:N” for attached; compute N relative among video streams:
-            # Build a mapping video_index -> within-video ordinal
-            vid_ord = []
-            for i in video_indices:
-                vid_ord.append(i)
-            log(f"[TempInfo] vid_ord is {vid_ord}")
-            attached_ord = vid_ord.index(attached_idx)  # 0-based among video streams
-            log(f"[TempInfo] attached_ord is {attached_ord}")
-            
-            # Video codec for the main video (assume main is the first video that isn't attached)
-            # Find main video ordinal:
-            
-            ''' MAIN ORD SUCKS
-            main_ord = None
-            for j, i in enumerate(video_indices):
-                disp = (streams[i].get("disposition") or {})
-                log(f"[TempInfo] disp2 is: {disp}")
-                if disp.get("attached_pic") != 1:
-                    main_ord = j
-                    break
-            if main_ord is None:
-                main_ord = 0  # fallback
-            log(f"[TempInfo] main_ord is: {main_ord}")
-            '''
-            
-            # oh right because the video codecs have gotta be ordered when i'm doing this bit in particular. 'attached_idx' is still cool tho
-            # WHY NOT JUST USE 'attached_idx' FOR THIS??? WHY DID IT MAKE ALL THIS EXCESSIVE CODE JUST TO REDO WHAT IT'S ALREADY DONE
-            # vvv i replaced attached_ord with main_ord idk why it did attached_ord bruh
-            # Override explicitly:
-            cmd += ["-c:v:{}".format(attached_ord), "copy",
-                    "-disposition:v:{}".format(attached_ord), "attached_pic"]
-            # Re-apply main video encoder explicitly (in case the global -c:v was overridden by copy above)
-            # (This is defensive; often the global -c:v applies already.)
-            # Example: ["-c:v:0","libsvtav1","-crf","32","-preset","6"]
-            # Only if we know main_ord:
-            # (You may skip this if your vcodec_args are global and apply to all v except the explicit copy.)
-            # cmd += ["-c:v:{}".format(main_ord)] + vcodec_args[1:]
-    
-    # MP4-friendly flags
-    #if is_mp4:
-    #    cmd += ["-movflags", "use_metadata_tags+faststart"]
+    # If the cover art is riding along (MP4/MOV/etc only - see mapping above), make sure it's
+    # always stream-copied and flagged as attached_pic regardless of the main video codec choice.
+    if attached_idx is not None and attached_idx in mapped_video_indices:
+        attached_ord = mapped_video_indices.index(attached_idx)
+        cmd += [f"-c:v:{attached_ord}", "copy", f"-disposition:v:{attached_ord}", "attached_pic"]
     
     # Map audio stream depending on user choice
     if a_choice == "none":
@@ -1075,7 +1176,6 @@ def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbp
     if attach_chapters:
         cmd += ["-map_chapters", "0"]
     cmd += ["-threads", f"{limited_threads()}", out_path]
-    #log(f"[Info] FFMPEG conversion CMD to be run is: {cmd}")
     return cmd
 
 def _parse_iso8601_z(dt_str):
@@ -1444,72 +1544,165 @@ def update_deno():
             log(f"[Error] Failed to replace Deno binary: {e}")
             return {"success": False, "message": f"Failed to update Deno: {e}"}
 
-def encode_worker(cmd, duration, out_path):
-    # log(f"[Debug] Starting FFmpeg with: {' '.join(cmd)}")
-    try:
-        global current_encoder
-        log(f"[TempInfo] CMD actually being run: {cmd}")
-        log(f"[TempInfo] Duration: {duration} -- Output path: {out_path}")
-        ff = FfmpegProgress(cmd)
-        log("[Debug] FFmpegProgress object created.")
-        current_encoder = ff
+# --- Re-encode job queue state -------------------------------------------------------------
+# The whole point of this system: files get queued up via "reencode_queue_add", and a single
+# background worker thread (reencode_queue_worker, started once at process startup) works
+# through them one at a time, pushing "event" messages back over the native messaging port
+# as each job starts, progresses, finishes, errors, or is stopped.
+reencode_queue = pyqueue.Queue()      # FIFO of job dicts waiting to be encoded
+reencode_jobs = {}                    # job_id -> job dict, for lookups/removal while still pending or active
+reencode_lock = threading.Lock()      # guards reencode_jobs / current_job_id / current_encoder / reserved_out_paths
+current_job_id = None                 # job_id of the file currently being encoded (or None)
+current_encoder = None                # the active FfmpegProgress instance (or None)
+stop_current_event = threading.Event()  # set right before we ask the active job to stop, so we know it was intentional
+reserved_out_paths = set()            # output paths already claimed by a pending/active job, to avoid collisions
+
+# Picks a not-yet-taken output path, appending " (1)", " (2)", etc. if needed.
+# Checks both the filesystem and paths already claimed by other queued/active jobs.
+def get_unique_out_path(out_path):
+    with reencode_lock:
+        base, ext = os.path.splitext(out_path)
+        candidate = out_path
+        i = 1
+        while os.path.exists(candidate) or candidate in reserved_out_paths:
+            candidate = f"{base} ({i}){ext}"
+            i += 1
+        reserved_out_paths.add(candidate)
+        return candidate
+
+def release_out_path(out_path):
+    with reencode_lock:
+        reserved_out_paths.discard(out_path)
+
+# Defensive server-side sanity check for container/codec combinations, in case the UI ever
+# sends something it shouldn't have allowed. Returns a list of error strings, or None if fine.
+def validate_reencode_config(out_ext, v_choice, a_choice):
+    out_ext = (out_ext or "").lower().lstrip(".")
+    errors = []
+    if out_ext == "amv":
+        return None  # AMV always forces its own fixed codecs server-side, see reencode_queue_add
+    if out_ext == "m4a":
+        if v_choice != "none":
+            errors.append("M4A output cannot contain a video stream.")
+        if a_choice not in ("copy", "aac"):
+            errors.append("M4A output only supports Copy or AAC audio.")
+    elif out_ext == "mp3":
+        if v_choice != "none":
+            errors.append("MP3 output cannot contain a video stream.")
+        if a_choice not in ("copy", "libmp3lame"):
+            errors.append("MP3 output only supports Copy or MP3 audio.")
+    elif out_ext in ("mp4", "mkv"):
+        pass  # both containers are flexible about codecs
+    else:
+        errors.append(f"Unsupported output container: .{out_ext}")
+    if v_choice == "none" and a_choice == "none":
+        errors.append("A file can't be encoded with both video and audio disabled.")
+    return errors or None
+
+# The persistent background worker. Started once, daemon thread, runs for the lifetime of the
+# process: blocks on reencode_queue.get() until a job is added, runs it to completion (or until
+# stopped), reports every state change back to the UI, then loops around for the next job.
+def reencode_queue_worker():
+    global current_job_id, current_encoder
+    while True:
+        job = reencode_queue.get()
+        job_id = job["job_id"]
+        
+        with reencode_lock:
+            still_pending = reencode_jobs.get(job_id)
+            if still_pending is None or still_pending.get("cancelled"):
+                # Job was removed (stop-all, or an individual queue removal) before it started
+                continue
+            current_job_id = job_id
+            still_pending["state"] = "active"
+        
+        stop_current_event.clear()
+        send_response({"event": "job_started", "job_id": job_id, "input_path": job["input_path"], "output_path": job["out_path"]})
+        log(f"[Info] Re-encode job started: {job_id} -- {job['input_path']} -> {job['out_path']}")
+        
         try:
+            ff = FfmpegProgress(job["cmd"])
+            with reencode_lock:
+                current_encoder = ff
+            
+            start_time = time.time()
+            
             for progress in ff.run_command_with_progress():
-                # log(f"[TempInfo] progress is: {progress}")
-                fixedduration = int(float(duration))
-                # log(f"[TempInfo] fixed duration is: {fixedduration}")
-                pct = max(progress, 0.1) / 100
-                # log(f"[TempInfo] pct is: {pct}")
-                encoded = fixedduration * pct
-                # log(f"[TempInfo] encoded is: {encoded}")
-                remaining = max(fixedduration - encoded, 0)
-                # log(f"[TempInfo] remaining is: {remaining}")
+                pct = max(min(progress, 100), 0.1)
+                elapsed = time.time() - start_time
+                # Extrapolate a wall-clock ETA from how fast we've actually gotten this far,
+                # rather than assuming encode speed matches the source's playback duration.
+                remaining = (elapsed / pct) * (100 - pct) if pct > 0.5 else None
                 send_response({
                     "event": "progress",
+                    "job_id": job_id,
                     "data": {
-                        "percent": round(progress),
-                        "encoded": round(encoded),
-                        "remaining": round(remaining),
+                        "percent": round(pct, 1),
+                        "elapsed": round(elapsed),
+                        "remaining": round(remaining) if remaining is not None else None,
                     }
                 })
-        except Exception as e:
-            log(traceback.format_exc())
-            log(f"[Error] Re-encode failed: {e}")
-            send_response({"success": False, "error": str(e)})
             
-            log2.info("------ Failed Re-encode - Exiting ------")
-            sys.exit(1)
+            if stop_current_event.is_set():
+                # quit_gracefully() asked ffmpeg to stop, and it exited cleanly rather than raising
+                log(f"[Info] Re-encode job stopped by user: {job_id}")
+                send_response({"event": "job_stopped", "job_id": job_id})
+            else:
+                log(f"[Info] Successfully re-encoded: {job['input_path']}")
+                send_response({
+                    "event": "job_complete",
+                    "job_id": job_id,
+                    "output": job["out_path"],
+                    "output_size": os.path.getsize(job["out_path"]) if os.path.isfile(job["out_path"]) else None,
+                    "input_size": os.path.getsize(job["input_path"]) if os.path.isfile(job["input_path"]) else None,
+                })
         
-        log(f"[Info] Successfully re-encoded file")
-        send_response({"success": True, "output": out_path})
-        log2.info("------ Finished Re-encode - Exiting ------")
-        sys.exit(0)
+        except Exception as e:
+            if stop_current_event.is_set():
+                log(f"[Info] Re-encode job stopped by user: {job_id}")
+                send_response({"event": "job_stopped", "job_id": job_id})
+            else:
+                log(f"[Error] Re-encode job failed: {job_id} -- {e}")
+                log(traceback.format_exc())
+                send_response({"event": "job_error", "job_id": job_id, "error": str(e)})
+        
+        finally:
+            release_out_path(job["out_path"])
+            with reencode_lock:
+                current_encoder = None
+                current_job_id = None
+                reencode_jobs.pop(job_id, None)
+
+def stopAllDownloads():
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "yt-dlp.exe"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"status": "success"}
+    except subprocess.CalledProcessError:
+        return {"status": "nonerunning"}
+    except PermissionError:
+        return {"status": "noperms"}
     except Exception as e:
-        log(f"[Error] FFMPEG failed to re-encode file: {e}")
-        send_response({"success": False, "error": str(e)})
-        
-        log2.info("------ Failed Re-encode - Exiting ------")
-        sys.exit(1)
-    #finally:
-        #current_encoder = None
+        return {"status": "error", "message": e}
 
 # Receives messages from whatever is communicating with us.
 # Depending on the message, it will do different things, as detailed below.
-def main():
+def dispatch(msg):
     try:
         CFG_PATH, DOWNLOAD_DIR, recovery_notice = load_config()
-        global current_thread, msg
-        # global current_encoder # it ain't supposed to be globalised here
         
-        msg = read_message()
         log(f"[Info] Message received: {msg}")
-        if not msg:
-            log(f"[Error] No message received.")
-            send_response({"status": "error", "message": "No message received."})
-            return
 
         action = msg.get("action")
         dep = msg.get("dep")
+        request_id = msg.get("request_id")
+        
+        # Used only by the re-encode tool's request/response actions below, so the UI can match
+        # a reply back to the exact request it sent (the async job_* events use job_id instead).
+        def reply(payload):
+            if request_id is not None:
+                payload = dict(payload)
+                payload["request_id"] = request_id
+            send_response(payload)
         
         # "Hey, you. Download this URL, and here's a format key for you to figure out."
         if action == "download":
@@ -1521,8 +1714,9 @@ def main():
             cropchecked = msg.get("cropchecked")
             cropstart = msg.get("cropstart")
             cropend = msg.get("cropend")
+            numberingchecked = msg.get("numberingchecked")
             log(f"[TempInfo] cropchecked: {cropchecked} cropstart: {cropstart} cropend: {cropend}")
-            result = run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart, cropend)
+            result = run_download(url, format_key, datechecked, pagetype, cropchecked, cropstart, cropend, numberingchecked)
             if recovery_notice:
                 result["recovery_notice"] = recovery_notice
             send_response(result)
@@ -1557,107 +1751,168 @@ def main():
             url = msg.get("url")
             send_response(get_file_sizes(url))
         
-        # "Let the user choose a file and validate that it's cool please."
-        elif action == "reencode_pick_file":
-            # Native file dialog -> probe -> return summary
-            path = pick_file_dialog()
-            if not path:
-                send_response({"success": False, "error": "No file selected."})
+        # "Let the user choose one or more files to re-encode, and probe each one."
+        elif action == "reencode_pick_files":
+            paths = pick_files_dialog()
+            if not paths:
+                reply({"success": False, "error": "No files selected.", "files": []})
                 return
-            ext = os.path.splitext(path)[1].lower()
-            if ext not in SUPPORTED_INPUT_EXTS:
-                send_response({"success": False, "error": f"Unsupported file type: {ext}"})
-                return
-            info = probe_file(path)
-            log(f"[Info] File to re-encode's info: {info}")
-            send_response(info)
+            results = []
+            for path in paths:
+                ext = os.path.splitext(path)[1].lower()
+                if ext not in SUPPORTED_INPUT_EXTS:
+                    results.append({"success": False, "path": path, "filename": os.path.basename(path), "error": f"Unsupported file type: {ext}"})
+                    continue
+                results.append(probe_file(path))
+            log(f"[Info] Picked {len(results)} file(s) to re-encode")
+            reply({"success": True, "files": results})
         
-        # "Start the re-encoding please."
-        elif action == "reencode_start":
-            log(f"[TempInfo] Got here")
-            input_path = msg.get("input_path") # Input file path
-            out_ext = msg.get("out_container") # Output file's container
-            v_choice = msg.get("v_choice") # Video codec to re-encode to
-            a_choice = msg.get("a_choice") # Audio codec to re-encode to
-            final_bitrate_kbps = msg.get("final_bitrate_kbps") # Audio bitrate (kbps)
-            attach_metadata = msg.get("attach_metadata") # Toggle whether to attach metadata (true/false)
-            attach_chapters = msg.get("attach_chapters") # Toggle whether to attach chapters (true/false)
-            crf_word = msg.get("crf") # low/default/high
-            fps = msg.get("fps") # Currently unused pending further testing - Target FPS to re-encode to
-            use_gpu = msg.get("use_gpu") # True/False
-            gpu_type = msg.get("gpu_type") # nvidia/intel/amd
-            v_width = msg.get("v_width") # Input video's width
-            v_height = msg.get("v_height") # Input video's height
-            v_fps = msg.get("v_fps") # Input video's framerate
-            duration = msg.get("duration") # Input video's duration in seconds (no decimals either)
+        # "Let the user choose a folder, and probe every supported file found directly inside it."
+        elif action == "reencode_pick_folder":
+            paths = pick_folder_dialog()
+            if not paths:
+                reply({"success": False, "error": "No folder selected, or it had no supported media files.", "files": []})
+                return
+            results = [probe_file(path) for path in paths]
+            log(f"[Info] Picked a folder with {len(results)} supported file(s) to re-encode")
+            reply({"success": True, "files": results})
+        
+        # "Add this file, with these settings, to the re-encode queue."
+        elif action == "reencode_queue_add":
+            input_path = msg.get("input_path")            # Input file path
+            out_ext = (msg.get("out_container") or "mkv").lower().lstrip(".")  # Output container, e.g. "mkv"
+            v_choice = msg.get("v_choice")                 # Video codec to re-encode to
+            a_choice = msg.get("a_choice")                 # Audio codec to re-encode to
+            final_bitrate_kbps = msg.get("final_bitrate_kbps")  # Target audio bitrate (kbps), from probe
+            attach_metadata = msg.get("attach_metadata")   # Toggle whether to keep metadata (true/false)
+            attach_chapters = msg.get("attach_chapters")   # Toggle whether to keep chapters (true/false)
+            crf_word = msg.get("crf") or "default"          # low/default/high
+            use_gpu = msg.get("use_gpu")                    # true/false
+            gpu_type = msg.get("gpu_type")                  # currently only "nvidia" is supported
+            duration = msg.get("duration")                  # Input file's duration in seconds, from probe
+            cropchecked = msg.get("cropchecked")            # Toggle whether to clip the file
+            crop_start = msg.get("crop_start")               # HH:MM:SS
+            crop_end = msg.get("crop_end")                   # HH:MM:SS
+            target_width = msg.get("target_width")           # Output width in pixels, or None for "Original"
+            target_height = msg.get("target_height")         # Output height in pixels, or None for "Original"
+            target_fps = msg.get("target_fps")               # Output FPS (1-999), or None to leave untouched
+            source_fps = msg.get("source_fps")               # Input file's FPS, from probe - used to clamp target_fps
+            use_gpu_decode = msg.get("use_gpu_decode")        # Opt-in: also decode via NVDEC, not just encode via NVENC
             
-            def validateIfThisIsAValidNumber(num, type):
-                try:
-                    #if type(num) == int or type(num) == float or type(num) == str:
-                    if isinstance(num, (int, float, str)):
-                        if 1 <= num <= 1000:
-                            log(f"[TempInfo] {type} is {num}")
-                            return num
-                        else:
-                            log(f"[Error] {type} is not within expected bounds. How did you manage that?")
-                            send_response({"success": False, "error": f"{type} is not within expected bounds. How did you manage that?"})
-                            sys.exit()
-                    else:
-                        log(f"[Info] {type} has not been set. This can be fine if this is intentional. Assuming default values for {type}.")
-                        return None
-                except Exception as e:
-                    log(f"[Error] Failed to validate {type} input: {e}")
-                    #send_response({"success": False, "error": f"Failed to validate {type} input: {e}"})
-                    return None
+            if not input_path or not os.path.isfile(input_path):
+                reply({"success": False, "error": "Input file missing.", "input_path": input_path})
+                return
             
-            fps = validateIfThisIsAValidNumber(fps, "FPS")
+            # AMV is a fixed legacy format - its video/audio codecs are never user-selectable
+            if out_ext == "amv":
+                v_choice = "amv_v"
+                a_choice = "amv_a"
             
-            if not os.path.isfile(input_path):
-                send_response({"success": False, "error": "Input file missing."})
+            config_errors = validate_reencode_config(out_ext, v_choice, a_choice)
+            if config_errors:
+                log(f"[Error] Rejected re-encode config for {input_path}: {config_errors}")
+                reply({"success": False, "error": " ".join(config_errors), "input_path": input_path})
                 return
             
             base = os.path.splitext(os.path.basename(input_path))[0]
-            out_name = f"{base}_re{out_ext}"
-            out_path = os.path.join(DOWNLOAD_DIR, out_name)
-            log(f"[TempInfo] Got here 2")
-            cmd = build_ffmpeg_cmd(
-                input_path, out_path, v_choice, a_choice, final_bitrate_kbps, attach_metadata, attach_chapters, fps,
-                use_gpu, gpu_type, crf_word, v_width, v_height, v_fps
-            )
-            log(f"[Info] Re-encode start: {' '.join(cmd)}")
+            out_path = get_unique_out_path(os.path.join(DOWNLOAD_DIR, f"{base}.{out_ext}"))
             
-            current_thread = threading.Thread(
-                target=encode_worker,
-                args=(cmd, duration, out_path),
-                daemon=False # was True
-                # I can't figure out why it didn't like being True. Refreshing the page still ends the re-encode so it's whatever I guess.
-            )
-            current_thread.start()
+            try:
+                cmd = build_ffmpeg_cmd(
+                    input_path, out_path, v_choice, a_choice, final_bitrate_kbps, attach_metadata, attach_chapters,
+                    use_gpu, gpu_type, crf_word, cropchecked, crop_start, crop_end,
+                    target_width, target_height, target_fps, source_fps, use_gpu_decode
+                )
+            except Exception as e:
+                release_out_path(out_path)
+                log(f"[Error] Failed to build FFmpeg command for {input_path}: {e}")
+                log(traceback.format_exc())
+                reply({"success": False, "error": f"Failed to build FFmpeg command: {e}", "input_path": input_path})
+                return
+            
+            job_id = str(uuid.uuid4())
+            job = {
+                "job_id": job_id,
+                "input_path": input_path,
+                "out_path": out_path,
+                "cmd": cmd,
+                "duration": duration,
+                "state": "pending",
+                "cancelled": False,
+            }
+            with reencode_lock:
+                reencode_jobs[job_id] = job
+            
+            log(f"[Info] Queued re-encode job {job_id}: {input_path} -> {out_path}")
+            log(f"[Info] FFmpeg command for {job_id}: {' '.join(cmd)}")
+            # Reply before the job goes on the queue: the worker thread may be sitting idle
+            # (e.g. this is the only/first job) and could otherwise dequeue and start it - sending
+            # job_started - before the client even knows this job_id exists.
+            reply({"success": True, "job_id": job_id, "input_path": input_path, "output_path": out_path})
+            reencode_queue.put(job)
         
-        elif action == "reencode_stop":
-            #global current_encoder
-            log("[TempInfo] Received request to stop re-encode")
-            current_encoder = None # COMMENT THIS OUT, DEBUG ONLY
-            if current_encoder is not None:
+        # "Remove this not-yet-started file from the queue."
+        elif action == "reencode_queue_remove":
+            job_id = msg.get("job_id")
+            with reencode_lock:
+                job = reencode_jobs.get(job_id)
+                if job is None:
+                    reply({"success": False, "error": "That job is no longer in the queue.", "job_id": job_id})
+                    return
+                if job.get("state") == "active":
+                    reply({"success": False, "error": "That file is already being encoded - use Stop instead.", "job_id": job_id})
+                    return
+                job["cancelled"] = True
+                reencode_jobs.pop(job_id, None)
+                reserved_out_paths.discard(job["out_path"])
+            log(f"[Info] Removed queued job {job_id} before it started")
+            reply({"success": True, "job_id": job_id})
+        
+        # "Stop whatever's currently encoding. The queue worker will move on to the next item by itself."
+        elif action == "reencode_stop_current":
+            with reencode_lock:
+                job_id = current_job_id
+                ff = current_encoder
+            if job_id is None or ff is None:
+                reply({"success": False, "error": "No active encode to stop."})
+                return
+            stop_current_event.set()
+            try:
+                ff.quit_gracefully()
+                log(f"[Info] Sent stop request for active job {job_id}")
+            except Exception as e:
+                # ffmpeg_progress_yield can raise here even after successfully signalling the
+                # stop (e.g. a redundant force-kill attempt on a process that already exited
+                # from the graceful quit) - harmless. The actual outcome is reported separately
+                # by the worker thread's job_stopped/job_error event, so don't fail this reply
+                # over a cleanup error that happened after the real work was already done.
+                log(f"[Info] quit_gracefully() raised after signalling stop for {job_id} (likely harmless): {e}")
+            reply({"success": True, "job_id": job_id})
+        
+        # "Stop everything currently encoding or queued."
+        elif action == "reencode_stop_all":
+            removed = []
+            with reencode_lock:
+                pending_ids = [jid for jid, job in reencode_jobs.items() if job.get("state") != "active"]
+                for jid in pending_ids:
+                    job = reencode_jobs.pop(jid, None)
+                    if job:
+                        job["cancelled"] = True
+                        reserved_out_paths.discard(job["out_path"])
+                        removed.append(jid)
+                active_job_id = current_job_id
+                ff = current_encoder
+            for jid in removed:
+                send_response({"event": "job_stopped", "job_id": jid})
+            if ff is not None:
                 try:
-                    current_encoder.quit_gracefully()
-                    log("[TempInfo] Sent FFmpeg request to quit gracefully")
-                    send_response({"event": "stopping"})
-                    
-                    log2.info("------ Ended Re-encode - Exiting ------")
-                    sys.exit(0)
+                    stop_current_event.set()
+                    ff.quit_gracefully()
+                    log(f"[Info] Sent stop request for active job {active_job_id} as part of Stop All")
                 except Exception as e:
-                    log(f"[Error] Failed to stop FFmpeg's re-encode: {str(e)}")
-                    send_response({"success": False, "error": str(e)})
-                    
-                    log2.info("------ Failed to stop Re-encode - Exiting ------")
-                    sys.exit(1)
-            else:
-                log("[TempInfo] There isn't an active encode (If you're seeing this, that's bad)")
-                #send_response({"success": False, "error": "No active encode"})
-                
-                #log2.info("------ Failed Re-encode - Exiting ------")
-                #sys.exit(1)
+                    log(f"[Error] Failed to stop active re-encode during Stop All: {e}")
+            log(f"[Info] Stop All: removed {len(removed)} queued job(s){' and stopped the active one' if ff else ''}")
+            reply({"success": True, "removed": removed, "stopped_active": ff is not None})
         
         # --- New Dependency Checker Table ---
         #
@@ -1788,16 +2043,26 @@ def main():
         elif action == "open_defender":
             try:
                 os.startfile("windowsdefender://exclusions")
-                send_response({"success": true})
+                send_response({"success": True})
             except Exception as e:
-                send_response({"success": false, "message": e})
+                send_response({"success": False, "message": str(e)})
+        
+        elif action == "stopAllDownloads":
+            log("[TempInfo] Got here in stopping downloads")
+            try:
+                resp = stopAllDownloads()
+                log(f"[TempInfo] Stop downloads result: {resp}")
+                send_response(resp)
+            
+            except Exception as e:
+                send_response({"status": "Error", "message": e})
         
         else:
             log("[Error] Unknown action message type")
             send_response({"status": "error", "success": False, "message": "Unknown action message type."})
     except Exception as e:
-        log(f"Stub crashed: {str(e)}")
-        send_response({"status": "error", "message": "Stub crashed. See log."})
+        log(f"Native Client crashed: {str(e)}")
+        send_response({"status": "error", "message": "Native Client crashed. See log."})
 
 if __name__ == "__main__":
     log2.info("------ Native Client Started ------")
@@ -1806,17 +2071,30 @@ if __name__ == "__main__":
     # log2.warning("Warning message")
     # log2.error("Error message")
     # log2.critical("Critical message")
+    
+    # The re-encode queue worker runs for the lifetime of this process. It's harmless to start
+    # even for plain one-shot calls (download, update checks, etc.) since it just blocks on an
+    # empty queue until something is added to it.
+    threading.Thread(target=reencode_queue_worker, daemon=True).start()
+    
     try:
-        main()
-        
-        #msg = read_message()
-        #log2.info(f"second msg is {msg}")
-        action = msg.get("action")
-        if action not in ("reencode_start", "reencode_stop"):
-            log2.info("------ Native Client Finished ------")
-            sys.exit(0)
-        else: # Doesn't sys.exit so the port stays open1
-            log2.info("It was going to sys exit but the port must remain open!")
+        while True:
+            msg = read_message()
+            if msg is None:
+                # Stdin closed - either a one-shot sendNativeMessage caller already got its
+                # single reply and Firefox closed the pipe, or a connectNative port was disconnected.
+                break
+            try:
+                dispatch(msg)
+            except Exception as e:
+                log(f"[Fatal Error] Dispatch crashed outside its own handler: {e}")
+                log(traceback.format_exc())
+                try:
+                    send_response({"status": "error", "message": "Native Client crashed. See log."})
+                except Exception:
+                    break
+        log2.info("------ Native Client Finished ------")
+        sys.exit(0)
     except Exception as e:
         log(f"[Fatal Error] Native Client failed somehow: {e}")
         sys.exit(1)
