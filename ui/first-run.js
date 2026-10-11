@@ -87,11 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
 	// Cooldown reset after 4 seconds
 	setTimeout(() => {
       removeCooldown4();
-	  NCresult.innerHTML = `<ol><li>The Native Client setup <i>should</i> now be downloaded - Run it and follow the instructions provided.</li>
-	  <li>If it did not download, refresh the page and click the download button again.</li>
-	  <li>You might see a Windows SmartScreen popup, that is to be expected because I'm not paying some signing authority just for this, just click <i><strong>More info</strong></i> and then <i><strong>Run anyway</strong></i>.</li>
-	  <li>It might take a good minute or two, so just be patient.</li>
-	  <li>After you have completed the installation, click the "Check if Native Client is installed" button again.</li></ol>`;
+	  NCresult.innerHTML = `<ol><li>The Native Client setup <i>should</i> now be downloaded - Run it and follow the installation steps.<br>If it did not download, click the download button again.</li>
+	  <li>You might see a Windows SmartScreen popup - that is to be expected because I'm not paying some signing authority just for this, just click <i><strong>More info</strong></i> and then <i><strong>Run anyway</strong></i>.</li>
+	  <li>If you run into an "Access is denied" error, try running the installer as Administrator.<br>This might be because your Windows user is not an administrator; non-admins cannot write to C:\ProgramData.</li>
+	  <li>After it is complete, click the "Check if Native Client is installed" button again to ensure it works.</li></ol>`;
 	}, 4000);
   });
   

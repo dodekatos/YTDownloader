@@ -117,8 +117,83 @@
   }
 
   /* ============================================================
-     Buttons
+     Keyboard shortcuts panel
      ============================================================ */
+  .shortcuts-bar{
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 18px;
+  }
+
+  .shortcuts-toggle-row{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-faint);
+    cursor: pointer;
+    width: fit-content;
+    padding: 2px 0;
+    user-select: none;
+  }
+  .shortcuts-toggle-row input{ accent-color: var(--accent-video); }
+
+  .shortcuts-table{
+    display: grid;
+    grid-template-columns: repeat(6, auto);
+    column-gap: 2px;
+    row-gap: 2px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    width: fit-content;
+  }
+  .shortcuts-table[hidden]{ display: none; }
+
+  .sk-group-gap{
+    grid-column: 1 / -1;
+    height: 6px;
+  }
+
+  .sk-row{
+    display: contents; /* each child becomes a direct grid item */
+  }
+  .sk-row > *{
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s ease;
+  }
+  .sk-row.active > *{
+    background: var(--accent-video-dim);
+  }
+
+  .sk-key{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--bg-raised-hi);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 2px 8px;
+    text-align: center;
+    white-space: nowrap;
+    justify-self: start;
+    align-self: center;
+  }
+
+  .sk-desc{
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    align-self: center;
+    padding-right: 18px;
+  }
+
   button{
     font-family: var(--font-ui);
     font-size: 13px;
@@ -341,6 +416,81 @@
     color: var(--accent-audio);
   }
 
+  /* Audio bitrate quality hint */
+  .ab-kbps{
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+  .ab-hint{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-style: italic;
+  }
+  /* ---- Tier colours: edit the JS AUDIO_BITRATE_TIERS array to change the ranges ---- */
+  .ab-bad   { color: #E2574C; } /* red    — very low  */
+  .ab-low   { color: #C97B2A; } /* orange — low       */
+  .ab-ok    { color: #B8A020; } /* yellow — acceptable */
+  .ab-good  { color: #4CAF7D; } /* green  — good      */
+  .ab-great { color: #2E7D52; } /* dark green — high  */
+  .ab-warn  { color: #B8A020; } /* yellow — very high */
+
+  /* Timelapse section */
+  .timelapse-row{
+    margin-bottom: 10px;
+  }
+  .timelapse-inputs{
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .timelapse-inputs .field{
+    flex: 1;
+    min-width: 120px;
+  }
+  .timelapse-equals{
+    color: var(--text-faint);
+    font-size: 12px;
+    padding-bottom: 9px;
+    flex-shrink: 0;
+  }
+  .timelapse-notices{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .timelapse-codec-notices{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tl-notice{
+    font-size: 11.5px;
+    padding: 5px 9px;
+    border-radius: var(--radius-sm);
+    border-left: 2px solid;
+    font-family: var(--font-mono);
+  }
+  .tl-notice.info{
+    background: rgba(91,141,239,0.08);
+    border-color: var(--accent-video);
+    color: #9CB7F5;
+  }
+  .tl-notice.warn{
+    background: rgba(232,163,61,0.08);
+    border-color: var(--accent-audio);
+    color: #F0C172;
+  }
+  .tl-notice.error{
+    background: rgba(226,87,76,0.08);
+    border-color: var(--accent-danger);
+    color: #F5A49B;
+  }
+
   .checkbox-row{
     display: flex;
     align-items: center;
@@ -383,7 +533,6 @@
   .queue-item-head{
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
   }
 
@@ -392,6 +541,8 @@
     align-items: center;
     gap: 8px;
     overflow: hidden;
+    flex: 1;
+    min-width: 0;
   }
 
   .queue-glyph{
@@ -416,6 +567,7 @@
     letter-spacing: 0.05em;
     color: var(--text-faint);
     flex-shrink: 0;
+    margin-right: 20px;
   }
 
   /* --- Two-line settings summary --- */
@@ -601,6 +753,33 @@
 	  <a style="color: orangered; text-decoration: none;" href="https://www.nvidia.com/en-us/geforce/drivers/" target="_blank" rel="noopener noreferrer">The latest version of FFMPEG requires Nvida GPU Drivers 610+ - If you are getting unexpected errors, update your Nvidia drivers!</a></p>
     </header>
 
+    <div class="shortcuts-bar" id="shortcutsBar">
+      <label class="shortcuts-toggle-row">
+        <input type="checkbox" id="shortcutsEnabled">
+        Keyboard shortcuts
+      </label>
+      <div class="shortcuts-table" id="shortcutsTable" hidden>
+        <!-- Format/codecs group -->
+        <div class="sk-row" data-key="k"><span class="sk-key">K</span><span class="sk-desc">Container</span></div>
+        <div class="sk-row" data-key="e"><span class="sk-key">E</span><span class="sk-desc">Encoder</span></div>
+        <div class="sk-row" data-key="v"><span class="sk-key">V</span><span class="sk-desc">Video codec</span></div>
+        <div class="sk-row" data-key="a"><span class="sk-key">A</span><span class="sk-desc">Audio codec</span></div>
+        <div class="sk-row" data-key="q"><span class="sk-key">Q</span><span class="sk-desc">Quality</span></div>
+        <div class="sk-group-gap"></div>
+        <!-- Resolution/FPS group -->
+        <div class="sk-row" data-key="r"><span class="sk-key">R</span><span class="sk-desc">Resolution preset</span></div>
+        <div class="sk-row" data-key="f"><span class="sk-key">F</span><span class="sk-desc">FPS on/off</span></div>
+        <div class="sk-row" data-key="1"><span class="sk-key">1–6</span><span class="sk-desc">FPS 5 / 10 / 15 / 20 / 25 / 30</span></div>
+        <div class="sk-group-gap"></div>
+        <!-- Toggles group -->
+        <div class="sk-row" data-key="d"><span class="sk-key">D</span><span class="sk-desc">Decode on GPU</span></div>
+        <div class="sk-row" data-key="m"><span class="sk-key">M</span><span class="sk-desc">Keep metadata</span></div>
+        <div class="sk-row" data-key="c"><span class="sk-key">C</span><span class="sk-desc">Keep chapters</span></div>
+        <!-- Queue -->
+        <div class="sk-row" data-key="y"><span class="sk-key">Y</span><span class="sk-desc">Add to queue</span></div>
+      </div>
+    </div>
+
     <main>
       <section class="panel" id="queueSection">
         <div class="section-head">
@@ -732,11 +911,48 @@
         <span class="fps-hint" data-role="fps-hint"></span>
       </div>
 
+      <div class="crop-row" data-role="audio-bitrate-row" hidden>
+        <label class="checkbox-row" title="Output audio's bitrate in kbps" style="user-select: none;">
+          <input type="checkbox" data-role="audio-bitrate-enabled">
+          Custom audio bitrate
+        </label>
+        <input type="number" min="1" max="999" step="1" data-role="audio-bitrate-value" placeholder="192" disabled>
+        <span class="ab-kbps">kbps</span>
+        <span class="ab-hint" data-role="audio-bitrate-hint"></span>
+      </div>
+      <div data-role="audio-bitrate-warn-row" hidden style="margin:-4px 0 6px 0; padding-left: 2px;">
+        <span class="tl-notice warn" data-role="audio-bitrate-warn"></span>
+      </div>
+
       <div class="crop-row" data-role="gpu-decode-row" hidden>
         <label class="checkbox-row" title="Decode on the GPU (NVDEC) instead of CPU. At the slight cost of visual accuracy and storage efficiency, it might lower CPU usage a bit, especially when resizing/changing FPS." style="user-select: none;">
           <input type="checkbox" data-role="gpu-decode-enabled">
           Decode on GPU too (NVDEC)
         </label>
+      </div>
+
+      <div class="timelapse-row" data-role="timelapse-section" hidden>
+        <div class="crop-row" style="margin-bottom:6px;">
+          <label class="checkbox-row" title="Turn output video into a timelapse." style="user-select: none;">
+            <input type="checkbox" data-role="timelapse-enabled">
+            Timelapse / Speed
+          </label>
+        </div>
+        <div data-role="timelapse-controls" hidden>
+          <div class="timelapse-inputs" style="width: 35%;">
+            <div class="field">
+              <label>Final duration</label>
+              <input type="text" data-role="timelapse-duration" placeholder="00:00:00" inputmode="numeric">
+            </div>
+            <div class="timelapse-equals">at</div>
+            <div class="field">
+              <label>Speed multiplier</label>
+              <input type="number" data-role="timelapse-multiplier" placeholder="2.0" min="0.1" step="0.1">
+            </div>
+            <div class="timelapse-equals">×</div>
+          </div>
+          <div class="timelapse-notices" data-role="timelapse-notices"></div>
+        </div>
       </div>
 
       <div class="toggle-rows">

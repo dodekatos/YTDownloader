@@ -27,6 +27,8 @@ const els = {
   addFilesBtn: document.getElementById("addFilesBtn"),
   addFolderBtn: document.getElementById("addFolderBtn"),
   stopAllBtn: document.getElementById("stopAllBtn"),
+  shortcutsEnabled: document.getElementById("shortcutsEnabled"),
+  shortcutsTable: document.getElementById("shortcutsTable"),
   pendingList: document.getElementById("pendingList"),
   pendingEmpty: document.getElementById("pendingEmpty"),
   pendingCount: document.getElementById("pendingCount"),
@@ -206,6 +208,18 @@ function addPendingCard(probe) {
     encoder: root.querySelector('[data-role="encoder"]'),
     gpuDecodeRow: root.querySelector('[data-role="gpu-decode-row"]'),
     gpuDecodeEnabled: root.querySelector('[data-role="gpu-decode-enabled"]'),
+    audioBitrateRow: root.querySelector('[data-role="audio-bitrate-row"]'),
+    audioBitrateEnabled: root.querySelector('[data-role="audio-bitrate-enabled"]'),
+    audioBitrateValue: root.querySelector('[data-role="audio-bitrate-value"]'),
+    audioBitrateHint: root.querySelector('[data-role="audio-bitrate-hint"]'),
+    audioBitrateWarnRow: root.querySelector('[data-role="audio-bitrate-warn-row"]'),
+    audioBitrateWarn: root.querySelector('[data-role="audio-bitrate-warn"]'),
+    timelapseSection: root.querySelector('[data-role="timelapse-section"]'),
+    timelapseEnabled: root.querySelector('[data-role="timelapse-enabled"]'),
+    timelapseControls: root.querySelector('[data-role="timelapse-controls"]'),
+    timelapseDuration: root.querySelector('[data-role="timelapse-duration"]'),
+    timelapseMultiplier: root.querySelector('[data-role="timelapse-multiplier"]'),
+    timelapseNotices: root.querySelector('[data-role="timelapse-notices"]'),
     qualityField: root.querySelector('[data-role="quality-field"]'),
     quality: root.querySelector('[data-role="quality"]'),
     resolutionField: root.querySelector('[data-role="resolution-field"]'),
@@ -283,6 +297,178 @@ function renderProbeSuccess(entry) {
   }
 }
 
+// --- Audio bitrate quality tier definitions ---
+// Edit these ranges to adjust the guidance text and colours shown next to the bitrate input.
+// Tiers are checked in order; the first one where kbps <= max wins.
+// CSS classes: ab-bad (red), ab-low (orange), ab-ok (yellow), ab-good (green), ab-great (dark green), ab-warn (yellow)
+const AUDIO_BITRATE_TIERS = [
+  { max:  47, text: "Very low — are you sure you want audio this bad?",   cls: "ab-bad"   },
+  { max:  95, text: "Low — are you sure you want it this low?",           cls: "ab-low"   },
+  { max: 127, text: "Acceptable for archival or podcast use.",            cls: "ab-ok"    },
+  { max: 191, text: "Good bitrate.",                                      cls: "ab-good"  },
+  { max: 319, text: "High — good for high quality music.",                cls: "ab-great" },
+  { max: 999, text: "Very high — are you sure you need this?",            cls: "ab-warn"  },
+];
+
+function updateAudioBitrateHint(entry) {
+  const { f, probe } = entry;
+  const raw = f.audioBitrateValue.value;
+  const kbps = parseInt(raw, 10);
+
+  // Reset
+  f.audioBitrateHint.textContent = "";
+  f.audioBitrateHint.className = "ab-hint";
+  f.audioBitrateWarnRow.hidden = true;
+  f.audioBitrateWarn.textContent = "";
+
+  if (!f.audioBitrateEnabled.checked || isNaN(kbps) || kbps <= 0) return;
+
+  // Quality tier hint
+  const tier = AUDIO_BITRATE_TIERS.find(t => kbps <= t.max);
+  if (tier) {
+    f.audioBitrateHint.textContent = tier.text;
+    f.audioBitrateHint.classList.add(tier.cls);
+  }
+
+  // Exceeds-source warning (if probe has a known audio bitrate)
+  if (probe.audio_bitrate_kbps && kbps > probe.audio_bitrate_kbps) {
+    f.audioBitrateWarn.textContent =
+      `${kbps} kbps exceeds the source's detected audio bitrate of ${probe.audio_bitrate_kbps} kbps. ` +
+      `This won't improve quality — it'll just make the file larger.`;
+    f.audioBitrateWarnRow.hidden = false;
+  }
+}
+
+// --- HH:MM:SS ↔ seconds helpers (client-side) ---
+
+function hmsToSeconds(hms) {
+  const parts = hms.trim().split(":");
+  if (parts.length !== 3) return null;
+  const [h, m, s] = parts.map(Number);
+  if ([h, m, s].some(isNaN)) return null;
+  return h * 3600 + m * 60 + s;
+}
+
+function secondsToHms(totalSeconds) {
+  if (totalSeconds == null || isNaN(totalSeconds) || totalSeconds < 0) return "";
+  const s = Math.round(totalSeconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = n => String(n).padStart(2, "0");
+  return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+}
+
+// Returns the source duration in seconds to use for timelapse calculations:
+// the clipped duration if both clip fields are valid, otherwise the full probe duration.
+function getSourceDurationForTimelapse(entry) {
+  const { f, probe } = entry;
+  if (f.cropEnabled.checked) {
+    const start = hmsToSeconds(f.cropStart.value);
+    const end = hmsToSeconds(f.cropEnd.value);
+    if (start != null && end != null && end > start) return end - start;
+  }
+  return probe.duration ? parseFloat(probe.duration) : null;
+}
+
+// Builds the inline notice divs for the timelapse section
+function updateTimelapseNotices(entry) {
+  const { f } = entry;
+  f.timelapseNotices.innerHTML = "";
+
+  const mult = parseFloat(f.timelapseMultiplier.value);
+  if (isNaN(mult) || mult <= 0) return;
+
+  const addNotice = (msg, type) => {
+    const el = document.createElement("div");
+    el.className = `tl-notice ${type}`;
+    el.textContent = msg;
+    f.timelapseNotices.appendChild(el);
+  };
+
+  if (mult > 100) {
+    addNotice("Audio will be disabled — this speed exceeds ffmpeg's maximum audio tempo limit (100×).", "error");
+  } else if (mult < 0.5) {
+    addNotice("Audio will be disabled — this speed is below ffmpeg's minimum audio tempo limit (0.5×).", "error");
+  } else if (mult > 5) {
+    addNotice("At this speed, audio may be too distorted or loud to comfortably hear. Consider setting audio to None.", "warn");
+  }
+
+  if (mult < 1 && mult >= 0.5) {
+    addNotice("This will slow the video down rather than speed it up — double-check your values if that's not intentional. It'll still work.", "info");
+  }
+}
+
+// Called when the user checks timelapse — auto-switches incompatible codecs
+// Applies or removes timelapse option restrictions: disables vcodec Copy/None,
+// acodec Copy, and AMV container when timelapse is active so the user simply
+// cannot pick incompatible options rather than being intercepted after the fact.
+function applyTimelapseOptionRestrictions(entry, enable) {
+  const { f } = entry;
+  setOptionDisabled(f.vcodec, "copy", enable);
+  setOptionDisabled(f.vcodec, "none", enable);
+  setOptionDisabled(f.acodec, "copy", enable);
+  setOptionDisabled(f.container, "amv", enable);
+  setOptionDisabled(f.container, "m4a", enable);
+  setOptionDisabled(f.container, "mp3", enable);
+
+  if (enable) {
+    // Silently move off any now-disabled selection
+    if (f.vcodec.value === "copy" || f.vcodec.value === "none") {
+      f.vcodec.value = "libsvtav1";
+      f.vcodec.dispatchEvent(new Event("change"));
+    }
+    if (f.acodec.value === "copy") {
+      f.acodec.value = "aac";
+      f.acodec.dispatchEvent(new Event("change"));
+    }
+    if (f.container.value === "amv") {
+      f.container.value = "mkv";
+      f.container.dispatchEvent(new Event("change"));
+    }
+  }
+}
+
+function onTimelapseEnabled(entry) {
+  const { f } = entry;
+  applyTimelapseOptionRestrictions(entry, true);
+  f.timelapseControls.hidden = false;
+  updateTimelapseNotices(entry);
+}
+
+// Called when timelapse is unchecked — clears everything and restores options
+function onTimelapseDisabled(entry) {
+  const { f } = entry;
+  applyTimelapseOptionRestrictions(entry, false);
+  f.timelapseControls.hidden = true;
+  f.timelapseDuration.value = "";
+  f.timelapseMultiplier.value = "";
+  f.timelapseNotices.innerHTML = "";
+}
+
+// Syncs duration → multiplier (called when the user edits the duration field)
+function syncDurationToMultiplier(entry) {
+  const { f } = entry;
+  const srcDur = getSourceDurationForTimelapse(entry);
+  if (!srcDur) return;
+  const targetSec = hmsToSeconds(f.timelapseDuration.value);
+  if (!targetSec || targetSec <= 0) return;
+  const mult = srcDur / targetSec;
+  f.timelapseMultiplier.value = parseFloat(mult.toFixed(4));
+  updateTimelapseNotices(entry);
+}
+
+// Syncs multiplier → duration (called when the user edits the multiplier field)
+function syncMultiplierToDuration(entry) {
+  const { f } = entry;
+  const srcDur = getSourceDurationForTimelapse(entry);
+  if (!srcDur) return;
+  const mult = parseFloat(f.timelapseMultiplier.value);
+  if (isNaN(mult) || mult <= 0) return;
+  f.timelapseDuration.value = secondsToHms(srcDur / mult);
+  updateTimelapseNotices(entry);
+}
+
 function wireCardControls(entry) {
   const { f, probe } = entry;
 
@@ -298,6 +484,10 @@ function wireCardControls(entry) {
   f.container.addEventListener("change", () => updateFieldVisibility(entry));
   f.vcodec.addEventListener("change", () => updateFieldVisibility(entry));
   f.encoder.addEventListener("change", () => updateFieldVisibility(entry));
+  // Audio codec drives showAudioBitrate too (only aac/libmp3lame get a bitrate row) - without
+  // this listener, switching acodec from e.g. "copy" to "aac" left the row stuck hidden from
+  // its initial state, silently dropping any custom bitrate the user tried to set.
+  f.acodec.addEventListener("change", () => updateFieldVisibility(entry));
   f.cropEnabled.addEventListener("change", () => {
     f.cropStart.disabled = !f.cropEnabled.checked;
     f.cropEnd.disabled = !f.cropEnabled.checked;
@@ -320,6 +510,36 @@ function wireCardControls(entry) {
     }
   });
   f.fpsValue.addEventListener("change", () => clampFpsField(entry));
+
+  // Audio bitrate wiring
+  f.audioBitrateEnabled.addEventListener("change", () => {
+    f.audioBitrateValue.disabled = !f.audioBitrateEnabled.checked;
+    if (!f.audioBitrateEnabled.checked) {
+      f.audioBitrateValue.value = "";
+      updateAudioBitrateHint(entry);
+    }
+  });
+  f.audioBitrateValue.addEventListener("input", () => {
+    // Auto-correct 0 to 1, strip decimals
+    let v = parseInt(f.audioBitrateValue.value, 10);
+    if (!isNaN(v) && v <= 0) { f.audioBitrateValue.value = 1; }
+    updateAudioBitrateHint(entry);
+  });
+
+  // Timelapse wiring
+  f.timelapseEnabled.addEventListener("change", () => {
+    if (f.timelapseEnabled.checked) {
+      onTimelapseEnabled(entry);
+    } else {
+      onTimelapseDisabled(entry);
+    }
+  });
+  f.timelapseDuration.addEventListener("input", () => syncDurationToMultiplier(entry));
+  f.timelapseMultiplier.addEventListener("input", () => syncMultiplierToDuration(entry));
+  // Clip field changes should re-sync the timelapse duration if timelapse is active
+  f.cropStart.addEventListener("change", () => { if (f.timelapseEnabled.checked) syncMultiplierToDuration(entry); });
+  f.cropEnd.addEventListener("change", () => { if (f.timelapseEnabled.checked) syncMultiplierToDuration(entry); });
+  f.cropEnabled.addEventListener("change", () => { if (f.timelapseEnabled.checked) syncMultiplierToDuration(entry); });
 
   f.addBtn.addEventListener("click", () => onAddToQueueClick(entry));
 
@@ -386,7 +606,10 @@ function clampFpsField(entry) {
     return;
   }
   val = Math.max(1, Math.min(999, val));
-  if (probe.video_fps && val > probe.video_fps) {
+  // Don't cap to source FPS when timelapse is active — it's perfectly valid to output
+  // at a much higher FPS than the source when creating a timelapse.
+  const timelapseActive = !f.timelapseSection.hidden && f.timelapseEnabled.checked;
+  if (!timelapseActive && probe.video_fps && val > probe.video_fps) {
     val = Math.max(1, Math.round(probe.video_fps));
     f.fpsHint.textContent = `Capped to source's ${probe.video_fps}fps`;
   } else {
@@ -413,6 +636,7 @@ function updateFieldVisibility(entry) {
     setEncodeOnlyControlsVisible(entry, false);
     f.gpuDecodeRow.hidden = true;
     f.gpuDecodeEnabled.checked = false;
+    f.timelapseSection.hidden = true;
     return;
   }
 
@@ -425,20 +649,31 @@ function updateFieldVisibility(entry) {
     setEncodeOnlyControlsVisible(entry, false);
     f.gpuDecodeRow.hidden = true;
     f.gpuDecodeEnabled.checked = false;
+    f.timelapseSection.hidden = true;
 
     if (container === "m4a") {
+      const copyOk = probe.audio_codec === "aac";
+      setOptionDisabled(f.acodec, "copy", !copyOk);
       setOptionDisabled(f.acodec, "libmp3lame", true);
       setOptionDisabled(f.acodec, "none", true);
-      if (!["copy", "aac"].includes(f.acodec.value)) f.acodec.value = "aac";
+      const allowed = copyOk ? ["aac", "copy"] : ["aac"];
+      if (!allowed.includes(f.acodec.value)) f.acodec.value = "aac";
     } else {
+      const copyOk = probe.audio_codec === "mp3";
+      setOptionDisabled(f.acodec, "copy", !copyOk);
       setOptionDisabled(f.acodec, "aac", true);
       setOptionDisabled(f.acodec, "none", true);
-      if (!["copy", "libmp3lame"].includes(f.acodec.value)) f.acodec.value = "libmp3lame";
+      const allowed = copyOk ? ["libmp3lame", "copy"] : ["libmp3lame"];
+      if (!allowed.includes(f.acodec.value)) f.acodec.value = "libmp3lame";
     }
+
+    // m4a/mp3 always encode to aac/libmp3lame, so the bitrate row applies here too -
+    // this branch used to return early and leave it stuck hidden.
+    f.audioBitrateRow.hidden = false;
     return;
   }
 
-  // MKV / MP4 - fully flexible, but still respect what the input actually has
+  // MKV / MP4
   if (!probe.has_video) {
     f.vcodecField.hidden = true;
     f.vcodec.value = "none";
@@ -449,7 +684,7 @@ function updateFieldVisibility(entry) {
   if (!probe.has_audio) {
     f.acodec.value = "none";
   } else if (f.vcodec.value === "none" && f.acodec.value === "none") {
-    f.acodec.value = "copy"; // don't let both end up disabled silently
+    f.acodec.value = "copy";
   }
 
   const needsEncodeControls = ["libsvtav1", "libx265", "libx264"].includes(f.vcodec.value);
@@ -460,6 +695,24 @@ function updateFieldVisibility(entry) {
   const showGpuDecode = needsEncodeControls && f.encoder.value === "nvidia";
   f.gpuDecodeRow.hidden = !showGpuDecode;
   if (!showGpuDecode) f.gpuDecodeEnabled.checked = false;
+
+  // Timelapse only available for video files
+  f.timelapseSection.hidden = !probe.has_video;
+
+  // Keep timelapse option restrictions in sync with the checkbox state
+  applyTimelapseOptionRestrictions(entry, f.timelapseEnabled.checked);
+
+  // Audio bitrate row: only meaningful when actually encoding audio to a bitrate-based codec
+  const showAudioBitrate = ["aac", "libmp3lame"].includes(f.acodec.value);
+  f.audioBitrateRow.hidden = !showAudioBitrate;
+  if (!showAudioBitrate) {
+    f.audioBitrateEnabled.checked = false;
+    f.audioBitrateValue.disabled = true;
+    f.audioBitrateValue.value = "";
+    f.audioBitrateHint.textContent = "";
+    f.audioBitrateHint.className = "ab-hint";
+    f.audioBitrateWarnRow.hidden = true;
+  }
 }
 
 // Resolution/FPS only make sense while actually re-encoding (never with stream copy, audio-only
@@ -521,6 +774,18 @@ async function onAddToQueueClick(entry) {
     }
   }
 
+  let timelapseMult = null;
+  if (!f.timelapseSection.hidden && f.timelapseEnabled.checked) {
+    const rawMult = parseFloat(f.timelapseMultiplier.value);
+    if (isNaN(rawMult) || rawMult <= 0) {
+      showToast("Enter a valid speed multiplier for the timelapse (e.g. 2.0 for 2× speed).", "error");
+      f.addBtn.disabled = false;
+      f.addBtn.textContent = "Add to Queue →";
+      return;
+    }
+    timelapseMult = rawMult;
+  }
+
   f.addBtn.disabled = true;
   f.addBtn.textContent = "Adding…";
 
@@ -545,6 +810,10 @@ async function onAddToQueueClick(entry) {
     target_fps: targetFps,
     source_fps: probe.video_fps || null,
     use_gpu_decode: !f.gpuDecodeRow.hidden && f.gpuDecodeEnabled.checked,
+    timelapse_multiplier: timelapseMult,
+    target_audio_bitrate_kbps: (!f.audioBitrateRow.hidden && f.audioBitrateEnabled.checked)
+      ? (parseInt(f.audioBitrateValue.value, 10) || null)
+      : null,
   };
 
   const res = await sendRequest(payload);
@@ -630,12 +899,18 @@ function buildJobSummary(entry, payload) {
     vcodecDst: vcodecLabel,
     acodecSrc: probe.audio_codec ? probe.audio_codec.toUpperCase() : null,
     acodecDst: acodecLabel,
+    quality: { low: "Low Quality", default: "Default Quality", high: "High Quality" }[payload.crf] || payload.crf,
+    showQuality: !["none", "copy", "amv_v"].includes(payload.v_choice),
+    fileSizeDisplay: entry.probe.file_size_display || null,
+    durationDisplay: entry.probe.duration_display || null,
     hasVideo: probe.has_video,
     hasAudio: probe.has_audio,
     clip: payload.cropchecked ? { start: payload.crop_start, end: payload.crop_end } : null,
     gpuDecode: payload.use_gpu_decode === true,
     keepMetadata: !!payload.attach_metadata,
     keepChapters: !!payload.attach_chapters,
+    timelapse: payload.timelapse_multiplier != null ? `${parseFloat(payload.timelapse_multiplier).toFixed(3)}×` : null,
+    customAudioBitrate: payload.target_audio_bitrate_kbps ? `${payload.target_audio_bitrate_kbps} kbps audio` : null,
   };
 }
 
@@ -689,8 +964,25 @@ function renderQueueSummary(summaryEl, line1El, line2El, s) {
     seg++;
   }
 
+  // Quality (only shown when actually re-encoding video, not copy/none/amv)
+  if (s.showQuality) {
+    line1El.appendChild(_qsSpan(" · ", "qs-sep"));
+    line1El.appendChild(_qsSpan(s.quality, "qs-to"));
+  }
+
+  // File size and duration — separated by a wider gap so they read as metadata, not settings
+  if (s.fileSizeDisplay || s.durationDisplay) {
+    const spacer = document.createElement("span");
+    spacer.style.cssText = "flex: 1; min-width: 16px;";
+    line1El.appendChild(spacer);
+    const info = [s.fileSizeDisplay, s.durationDisplay].filter(Boolean).join("  ·  ");
+    line1El.appendChild(_qsSpan(info, "qs-from"));
+  }
+
   // --- Line 2: active flags only ---
   const flags = [];
+  if (s.timelapse) flags.push(`Timelapse ${s.timelapse}`);
+  if (s.customAudioBitrate) flags.push(s.customAudioBitrate);
   if (s.clip) flags.push(`Clip: ${s.clip.start} to ${s.clip.end}`);
   if (s.gpuDecode) flags.push("Decode on GPU too");
   if (s.keepMetadata) flags.push("Keep metadata");
@@ -840,6 +1132,14 @@ function buildQueueItemEl(job, idx) {
       meter.appendChild(seg);
     }
     updateMeterEl(meter, meterReadout, job);
+
+    if (job.summary?.timelapse) {
+      const notice = document.createElement("div");
+      notice.className = "tl-notice info";
+      notice.style.cssText = "margin-top:8px; font-family:var(--font-ui); font-size:11.5px;";
+      notice.textContent = "It's normal for timelapse encodes to show no progress. It's also heavily CPU reliant. Just be patient!";
+      root.appendChild(notice);
+    }
   } else {
     glyph.textContent = "⏸";
     badge.textContent = `queued · #${idx + 1}`;
@@ -940,8 +1240,10 @@ function showCompletedToast(filename, inputSize, outputSize) {
     arrow.textContent = "→";
 
     const after = document.createElement("span");
-    after.className = "toast-size-after " + (outputSize <= inputSize ? "smaller" : "larger");
-    after.textContent = humanFileSize(outputSize);
+    const smaller = outputSize <= inputSize;
+    after.className = "toast-size-after " + (smaller ? "smaller" : "larger");
+    const pct = ((outputSize / inputSize) * 100).toFixed(1);
+    after.textContent = `${humanFileSize(outputSize)} (${pct}%)`;
 
     row.appendChild(before);
     row.appendChild(arrow);
@@ -974,6 +1276,112 @@ els.statusLabel.addEventListener("click", () => {
 });
 els.statusLed.addEventListener("click", () => {
   if (!port) connectNative();
+});
+
+/* ==================================================================================
+   Keyboard shortcuts (opt-in, targets the top pending card only)
+   ================================================================================== */
+
+els.shortcutsEnabled.addEventListener("change", () => {
+  els.shortcutsTable.hidden = !els.shortcutsEnabled.checked;
+});
+
+const FPS_NUMBER_KEYS = { "1": 5, "2": 10, "3": 15, "4": 20, "5": 25, "6": 30 };
+
+// Advances a <select> to the next non-disabled option, wrapping around.
+function cycleSelect(selectEl) {
+  const opts = Array.from(selectEl.options).filter(o => !o.disabled);
+  if (opts.length < 2) return;
+  const curIdx = opts.findIndex(o => o.value === selectEl.value);
+  const next = opts[(curIdx + 1) % opts.length];
+  selectEl.value = next.value;
+  selectEl.dispatchEvent(new Event("change"));
+}
+
+// Briefly highlights the matching sk-row(s) for a key or set of keys
+function flashKey(...keys) {
+  for (const key of keys) {
+    const row = document.querySelector(`.sk-row[data-key="${key}"]`);
+    if (!row) continue;
+    row.classList.add("active");
+    setTimeout(() => row.classList.remove("active"), 300);
+  }
+}
+
+// Returns the field object for the first pending card, or null if there are none.
+function getTopCardFields() {
+  const first = pendingFiles.values().next().value;
+  return first ? first.f : null;
+}
+
+document.addEventListener("keydown", (e) => {
+  if (!els.shortcutsEnabled.checked) return;
+  // Don't fire when the user is typing into an input/select/textarea
+  const tag = document.activeElement?.tagName?.toLowerCase();
+  if (tag === "input" || tag === "select" || tag === "textarea") return;
+
+  const key = e.key.toLowerCase();
+  const f = getTopCardFields();
+  if (!f) return;
+
+  switch (key) {
+    case "k":
+      cycleSelect(f.container);
+      flashKey("k");
+      break;
+    case "v":
+      if (!f.vcodecField.hidden) { cycleSelect(f.vcodec); flashKey("v"); }
+      break;
+    case "a":
+      if (!f.acodecField.hidden) { cycleSelect(f.acodec); flashKey("a"); }
+      break;
+    case "e":
+      if (!f.encoderField.hidden) { cycleSelect(f.encoder); flashKey("e"); updateFieldVisibility(pendingFiles.values().next().value); }
+      break;
+    case "q":
+      if (!f.qualityField.hidden) { cycleSelect(f.quality); flashKey("q"); }
+      break;
+    case "r":
+      if (!f.resolutionField.hidden) {
+        const entry = pendingFiles.values().next().value;
+        cycleSelect(f.resolutionPreset);
+        applyResolutionPreset(entry, f.resolutionPreset.value);
+        flashKey("r");
+      }
+      break;
+    case "f":
+      if (!f.fpsRow.hidden) {
+        f.fpsEnabled.checked = !f.fpsEnabled.checked;
+        f.fpsEnabled.dispatchEvent(new Event("change"));
+        flashKey("f");
+      }
+      break;
+    case "d":
+      if (!f.gpuDecodeRow.hidden) {
+        f.gpuDecodeEnabled.checked = !f.gpuDecodeEnabled.checked;
+        flashKey("d");
+      }
+      break;
+    case "m":
+      f.keepMetadata.checked = !f.keepMetadata.checked;
+      flashKey("m");
+      break;
+    case "c":
+      f.keepChapters.checked = !f.keepChapters.checked;
+      flashKey("c");
+      break;
+    case "y":
+      f.addBtn.click();
+      flashKey("y");
+      break;
+    default:
+      // Number keys 1-6: set FPS to preset value if FPS is enabled
+      if (FPS_NUMBER_KEYS[key] !== undefined && !f.fpsRow.hidden && f.fpsEnabled.checked) {
+        f.fpsValue.value = FPS_NUMBER_KEYS[key];
+        clampFpsField(pendingFiles.values().next().value);
+        flashKey("1"); // all number keys share the same sk-row (data-key="1")
+      }
+  }
 });
 
 /* ==================================================================================
