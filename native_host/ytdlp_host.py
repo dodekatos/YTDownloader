@@ -846,6 +846,16 @@ def seconds_to_hms(seconds):
     minutes, secs = divmod(remainder, 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
+def hms_to_seconds(hms):
+    try:
+        parts = str(hms).strip().split(":")
+        if len(parts) != 3:
+            return None
+        h, m, s = int(parts[0]), int(parts[1]), int(parts[2])
+        return h * 3600 + m * 60 + s
+    except (TypeError, ValueError):
+        return None
+
 # Converts a byte count into a human-readable string, e.g. "245.3 MB"
 def human_filesize(num_bytes):
     try:
@@ -1037,7 +1047,8 @@ def _clamp_fps(target_fps, source_fps):
 # The command used to re-encode the user's chosen file
 def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbps, attach_metadata, attach_chapters,
         use_gpu, gpu_type, crf_word, cropchecked, crop_start, crop_end,
-        target_width=None, target_height=None, target_fps=None, source_fps=None, use_gpu_decode=False):
+        target_width=None, target_height=None, target_fps=None, source_fps=None, use_gpu_decode=False,
+        timelapse_multiplier=None, target_audio_bitrate_kbps=None):
     """
     v_choice: one of ["copy","libx265","libx264","libsvtav1","none","amv_v"]
     a_choice: one of ["copy","aac","libmp3lame","none","amv_a"]
@@ -1081,12 +1092,26 @@ def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbp
         # but not every GPU generation/driver can decode every source codec, so this isn't
         # forced on by default; if a particular file fails with this enabled, try unchecking it.
         cmd += ["-hwaccel", "cuda"]
-    cmd += ["-i", f"{input_path}"]
     
-    # Clipping/cropping applies regardless of codec choice (including stream copy and audio-only output)
+    PRE_SEEK_SECONDS = 4
     if cropchecked and crop_start and crop_end:
         log(f"[Info] Cropping between {crop_start} and {crop_end}")
-        cmd += ["-ss", crop_start, "-to", crop_end]
+        start_sec = hms_to_seconds(crop_start)
+        end_sec = hms_to_seconds(crop_end)
+        if start_sec is not None and end_sec is not None:
+            coarse_start_sec = max(0, start_sec - PRE_SEEK_SECONDS)
+            fine_offset_sec = start_sec - coarse_start_sec
+            clip_duration_sec = end_sec - start_sec
+            cmd += ["-ss", seconds_to_hms(coarse_start_sec)]
+        else:
+            # Fallback: just use the raw strings as-is
+            cmd += ["-ss", crop_start]
+    cmd += ["-i", f"{input_path}"]
+    if cropchecked and crop_start and crop_end:
+        if start_sec is not None and end_sec is not None:
+            cmd += ["-ss", seconds_to_hms(fine_offset_sec), "-t", seconds_to_hms(clip_duration_sec)]
+        else:
+            cmd += ["-to", crop_end]
     
     # --- Explicit stream selection ---
     # Deliberately not using a blanket "-map 0" here: some files carry extra "data" or
@@ -1132,18 +1157,28 @@ def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbp
             quality_value = spec["quality"].get(crf_word, spec["quality"]["default"])
             cmd += ["-c:v", spec["encoder"]] + spec["preset_args"] + [ENCODER_REGISTRY[accel]["quality_flag"], str(quality_value)]
             
-            # Resolution/FPS changes only make sense while actually re-encoding (never with
-            # stream copy, hence this living inside the encoder-codec branch). Both are scoped
-            # to v:0 specifically - the main video stream is always mapped first - so they never
-            # collide with the attached cover-art stream, which must stay a plain, unfiltered copy.
+            # Build one combined video filter string: scale, fps, and setpts (timelapse) must all
+            # live in a single -filter:v:0 argument - ffmpeg only accepts one video filter per
+            # stream, and using multiple -filter:v:0 flags would silently discard all but the last.
+            vf_parts = []
             w = _sane_dim(target_width)
             h = _sane_dim(target_height)
             if w and h:
-                cmd += ["-filter:v:0", f"scale={w}:{h}"]
+                vf_parts.append(f"scale={w}:{h}")
             
-            fps_val = _clamp_fps(target_fps, source_fps) if target_fps else None
+            fps_val = _clamp_fps(target_fps, source_fps if not timelapse_multiplier else None) if target_fps else None
             if fps_val:
-                cmd += ["-r:v:0", str(fps_val)]
+                vf_parts.append(f"fps={fps_val}")
+            
+            try:
+                tl = float(timelapse_multiplier) if timelapse_multiplier is not None else None
+            except (TypeError, ValueError):
+                tl = None
+            if tl and tl > 0:
+                vf_parts.append(f"setpts={1.0/tl:.6f}*PTS")
+            
+            if vf_parts:
+                cmd += ["-filter:v:0", ",".join(vf_parts)]
         else:
             # Unknown video codec choice - fall back to stream copy rather than failing the whole job
             log(f"[Error] Unrecognized video codec choice '{v_choice}', falling back to stream copy.")
@@ -1156,19 +1191,41 @@ def build_ffmpeg_cmd(input_path, out_path, v_choice, a_choice, final_bitrate_kbp
         cmd += [f"-c:v:{attached_ord}", "copy", f"-disposition:v:{attached_ord}", "attached_pic"]
     
     # Map audio stream depending on user choice
+    try:
+        tl_audio = float(timelapse_multiplier) if timelapse_multiplier is not None else None
+    except (TypeError, ValueError):
+        tl_audio = None
+    
+    # If timelapse is active and the multiplier is outside atempo's supported range, disable audio.
+    # The JS warns the user about this before they queue the job, but we enforce it here too.
+    if tl_audio is not None and tl_audio > 0 and (tl_audio < 0.5 or tl_audio > 100):
+        log(f"[Info] Timelapse multiplier {tl_audio} is outside atempo range (0.5-100) - disabling audio.")
+        a_choice = "none"
+    
+    # Resolve which audio bitrate to use: user-specified takes priority over probe-derived default.
+    # Sanity-clamp to 1-999 server-side in case the UI ever sends something unexpected.
+    try:
+        audio_bitrate = max(1, min(999, int(target_audio_bitrate_kbps))) if target_audio_bitrate_kbps is not None else final_bitrate_kbps
+    except (TypeError, ValueError):
+        audio_bitrate = final_bitrate_kbps
+
     if a_choice == "none":
         cmd += ["-an"]
     else:
         if a_choice == "copy":
             cmd += ["-c:a", "copy"]
         elif a_choice == "aac":
-            cmd += ["-c:a", "aac", "-b:a", f"{final_bitrate_kbps}k"]
+            cmd += ["-c:a", "aac", "-b:a", f"{audio_bitrate}k"]
         elif a_choice == "libmp3lame":
-            cmd += ["-c:a", "libmp3lame", "-b:a", f"{final_bitrate_kbps}k"]
+            cmd += ["-c:a", "libmp3lame", "-b:a", f"{audio_bitrate}k"]
         elif a_choice == "amv_a":
             cmd += ["-c:a", "adpcm_ima_amv", "-map", "0:a:0", "-ar", "22050"]
         else:
             cmd += ["-c:a", "copy"]
+        
+        # Add atempo audio speed filter if timelapse is active and within range
+        if tl_audio is not None and tl_audio > 0 and 0.5 <= tl_audio <= 100:
+            cmd += ["-filter:a", f"atempo={tl_audio:.6f}"]
 
     # Preserve metadata/chapters if the user requests it
     if attach_metadata:
@@ -1798,6 +1855,8 @@ def dispatch(msg):
             target_fps = msg.get("target_fps")               # Output FPS (1-999), or None to leave untouched
             source_fps = msg.get("source_fps")               # Input file's FPS, from probe - used to clamp target_fps
             use_gpu_decode = msg.get("use_gpu_decode")        # Opt-in: also decode via NVDEC, not just encode via NVENC
+            timelapse_multiplier = msg.get("timelapse_multiplier")  # Float speed multiplier, or None
+            target_audio_bitrate_kbps = msg.get("target_audio_bitrate_kbps")  # Integer kbps, or None
             
             if not input_path or not os.path.isfile(input_path):
                 reply({"success": False, "error": "Input file missing.", "input_path": input_path})
@@ -1821,7 +1880,8 @@ def dispatch(msg):
                 cmd = build_ffmpeg_cmd(
                     input_path, out_path, v_choice, a_choice, final_bitrate_kbps, attach_metadata, attach_chapters,
                     use_gpu, gpu_type, crf_word, cropchecked, crop_start, crop_end,
-                    target_width, target_height, target_fps, source_fps, use_gpu_decode
+                    target_width, target_height, target_fps, source_fps, use_gpu_decode,
+                    timelapse_multiplier, target_audio_bitrate_kbps
                 )
             except Exception as e:
                 release_out_path(out_path)
